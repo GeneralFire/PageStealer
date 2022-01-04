@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\Dbg">
+      <UniqueIdentifier>{1960c7db-4268-437d-83dd-72bf35ffa4c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Dbg">
+      <UniqueIdentifier>{a52f13c5-9bfb-4a6c-bcfe-673cfbc8663a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\VirtualMemDescription">
+      <UniqueIdentifier>{686bba35-d3bf-4d83-a8c6-2d05b6aa05df}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ArbRWThroughPageStealing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="driver_control.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ResourceLoader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PageStealer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sys.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CoreDBG.cpp">
+      <Filter>Source Files\Dbg</Filter>
+    </ClCompile>
+    <ClCompile Include="DbgHelpWrapper.cpp">
+      <Filter>Source Files\Dbg</Filter>
+    </ClCompile>
+    <ClCompile Include="DiaHelpWrapper.cpp">
+      <Filter>Source Files\Dbg</Filter>
+    </ClCompile>
+    <ClCompile Include="PE.cpp">
+      <Filter>Source Files\Dbg</Filter>
+    </ClCompile>
+    <ClCompile Include="debug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="driver_control.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource_array.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ResourceLoader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PageStealer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sys.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="asrdrv.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="iqvw.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="globals.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CoreDBG.h">
+      <Filter>Header Files\Dbg</Filter>
+    </ClInclude>
+    <ClInclude Include="DbgHelpWrapper.h">
+      <Filter>Header Files\Dbg</Filter>
+    </ClInclude>
+    <ClInclude Include="DiaHelpWrapper.h">
+      <Filter>Header Files\Dbg</Filter>
+    </ClInclude>
+    <ClInclude Include="PE.h">
+      <Filter>Header Files\Dbg</Filter>
+    </ClInclude>
+    <ClInclude Include="VirtualsHeader.h">
+      <Filter>Header Files\VirtualMemDescription</Filter>
+    </ClInclude>
+    <ClInclude Include="atzip.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="debug.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

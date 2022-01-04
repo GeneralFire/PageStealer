@@ -1,0 +1,467 @@
+#include "PageStealer.h"
+
+/// <summary>
+/// RETURNS DirectoryTable content
+/// </summary>
+/// <param name="PID">target process PID</param>
+/// <returns>Directory Table content; allocates buffer internally</returns>
+/// 
+VOID* PageStealer::GetProceessPageTableL4(DWORD PID)
+{
+	printf("%s FIX ME\n", __func__);
+	return (VOID*)NULL;
+
+	UINT64 EPROCESSAddr = 0;
+	std::set<ULONG_PTR> EprocessCandidates = GetEprocessCandidatesByPID(PID);
+
+	if (EprocessCandidates.size() >= 1)
+	{
+		printf("Eprocess candidates >= 1. Just pick first(aka *begin())\n");
+		EPROCESSAddr = *EprocessCandidates.begin();
+	}
+	if (EprocessCandidates.size() == 0)
+	{
+		printf("Eprcess candidates = 0. Exit.");
+		return (VOID*)0;
+	}
+	
+	CoreDBG coreDbg;
+	UINT64 DirBaseOffset = coreDbg.getFieldOffset((char*)"_KPROCESS", (char*)"DirectoryTableBase");
+
+	DriverControl& dc = DriverControl::GetInstance();
+	UINT64 DirBaseAddress = {0};
+
+	if (dc.ReadKernelVA(EPROCESSAddr + DirBaseOffset, 8, (UINT8*)&DirBaseAddress))
+	{
+		printf("PROCESS PAGETABLE PTR = 0x%llx\n ", DirBaseAddress);
+		VOID* PageTable = malloc(4 * 1024);
+
+		if (dc.ReadOverMapViewOfSection(DirBaseAddress, 4 * 1024, (UINT8*) PageTable))
+		{
+			return PageTable;
+		}
+		else
+		{
+			free(PageTable);
+		}
+	}
+
+    return (VOID*)0;
+}
+
+DWORD PageStealer::GetPIDByName(std::wstring ProcessName)
+{
+    PROCESSENTRY32W entry;
+    entry.dwSize = sizeof(PROCESSENTRY32W);
+
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+
+    if (Process32FirstW(snapshot, &entry) == TRUE)
+    {
+        while (Process32NextW(snapshot, &entry) == TRUE)
+        {
+            if (_wcsicmp(entry.szExeFile, ProcessName.c_str()) == 0)
+            {
+                return entry.th32ProcessID;
+            }
+        }
+    }
+
+    CloseHandle(snapshot);
+    return -1;
+}
+
+std::set<ULONG_PTR> PageStealer::GetEprocessCandidatesByPID(DWORD PID)
+{
+	DWORD cPID = PID;
+	ULONG uLength = 0;
+	std::set<ULONG_PTR> out = {};
+
+	const ULONG SystemExtendedHandleInformation = 0x40;
+	// This particular SYSTEM_INFORMATION_CLASS doesn't accurately return the correct number of bytes required
+	// some extra space is needed to avoid NTSTATUS C0000004 (STATUS_INFO_LENGTH_MISMATCH)
+	//
+
+	unsigned char lpProbeBuffer[1024] = { 0 };
+
+NTSTATUS status = NtQuerySystemInformation(
+	static_cast<SYSTEM_INFORMATION_CLASS>(SystemExtendedHandleInformation),
+	&lpProbeBuffer,
+	sizeof(lpProbeBuffer),
+	&uLength
+);
+
+if (!uLength) {
+
+	return {};
+}
+
+uLength += 50 * (sizeof(SYSTEM_HANDLE_INFORMATION_EX) + sizeof(SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX));
+//DEBUGOUT( "[+] Allocating 0x%x bytes for SystemExtendedHandleInformation\n", uLength );
+
+PVOID lpBuffer = VirtualAlloc(nullptr, uLength, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+if (!lpBuffer) {
+
+	return {};
+}
+
+RtlSecureZeroMemory(lpBuffer, uLength);
+
+ULONG uCorrectSize = 0;
+status = NtQuerySystemInformation(
+	static_cast<SYSTEM_INFORMATION_CLASS>(SystemExtendedHandleInformation),
+	lpBuffer,
+	uLength,
+	&uCorrectSize
+);
+
+if (!NT_SUCCESS(status)) {
+
+	return {};
+}
+
+SYSTEM_HANDLE_INFORMATION_EX* lpHandleInformation = reinterpret_cast<SYSTEM_HANDLE_INFORMATION_EX*>(lpBuffer);
+
+// HANDLE targetHandle = OpenProcess(PROCESS_ALL_ACCESS,
+// 	FALSE,
+//	PID);
+CoreDBG coreGdb;
+UINT64 PIDOffset = coreGdb.getFieldOffset((char*)"_EPROCESS", (char*)"UniqueProcessId");
+UINT64 ImageFileNameOffset = coreGdb.getFieldOffset((char*)"_EPROCESS", (char*)"ImageFileName");
+
+if (PIDOffset == -1 || ImageFileNameOffset == -1)
+{
+	return {};
+}
+
+for (UINT i = 0; i < lpHandleInformation->NumberOfHandles; i++)
+{
+	if (lpHandleInformation->Handles[i].UniqueProcessId == (DWORD)4)
+	{
+		//printf("\n------------\n\tPID: %lx\n\tOTI: %lx\n\tOBJ: 0x%llx\n------------\n", 
+		//	lpHandleInformation->Handles[i].UniqueProcessId,
+		//	lpHandleInformation->Handles[i].ObjectTypeIndex,
+		//	lpHandleInformation->Handles[i].Object);
+		// out.push_back((ULONG_PTR)lpHandleInformation->Handles[i].Object);
+
+		UINT64 buffer = 0;
+		char imageFileNameBuffer[15] = { 0 };
+
+		DriverControl& dc = DriverControl::GetInstance();
+		if (dc.ReadKernelVA(((UINT64)(lpHandleInformation->Handles[i].Object) + PIDOffset), 8, (UINT8*)&buffer) && buffer == PID)
+		{
+			out.insert((ULONG_PTR)lpHandleInformation->Handles[i].Object);
+		}
+	}
+	//if (lpHandleInformation->Handles[i].UniqueProcessId == cPID)
+	//{
+	//	printf("%llx\n", lpHandleInformation->Handles[i].Object);
+	//}
+	//if (lpHandleInformation->Handles[i].UniqueProcessId == cPID
+	//	&& lpHandleInformation->Handles[i].ObjectTypeIndex == 7) 
+	//{
+	//	out.push_back((ULONG_PTR)lpHandleInformation->Handles[i].Object);
+	//}
+}
+VirtualFree(lpBuffer, 0, MEM_RELEASE);
+return out;
+
+}
+
+VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries VATableEntriesRetRequest)
+{
+	DriverControl& dc = DriverControl::GetInstance();
+	VIRTUAL_ADDRESS va = reinterpret_cast<VIRTUAL_ADDRESS&> (va_);
+
+	PAGE_ENTRY<PML4E> pml4_entry;
+	PAGE_ENTRY<PDPE> pdp_entry;
+	PAGE_ENTRY<PDE> pd_entry;
+	PAGE_ENTRY<PTE> pt_entry;
+
+	debug::printf_d(debug::LogLevel::LOG, "translating 0x%llx\n", va.value);
+
+	UINT64 DirTable = (UINT64) GetDirectoryTableFromKPROCESS((PVOID)KPROCESS);
+	debug::printf_d(debug::LogLevel::LOG, "DirectoryTable 0x%llx\n", DirTable);
+
+	pml4_entry.pointer = (PPML4E)DirTable + va.pml4_index;
+	debug::printf_d(debug::LogLevel::LOG,  "PML4E 0x%llx\n", pml4_entry.pointer);
+
+	if (dc.ReadOverMapViewOfSection((UINT64)pml4_entry.pointer,
+		sizeof(PML4E), (UINT8*)&pml4_entry.value.value))
+	{
+		pdp_entry.pointer = (PPDPE)(pml4_entry.value.pfn << PAGE_SHIFT) + va.pdp_index;
+		debug::printf_d(debug::LogLevel::LOG, "PDPE 0x%llx\n", pdp_entry.pointer);
+
+		if (dc.ReadOverMapViewOfSection((UINT64)pdp_entry.pointer,
+			sizeof(PDPE), (UINT8*)&pdp_entry.value))
+		{
+			pd_entry.pointer = (PPDE)(pdp_entry.value.pfn << PAGE_SHIFT) + va.pd_index;
+			debug::printf_d(debug::LogLevel::LOG, "PDE 0x%llx\n", pd_entry.pointer);
+
+			if (dc.ReadOverMapViewOfSection((UINT64)pd_entry.pointer,
+				sizeof(PDE), (UINT8*)&pd_entry.value))
+			{
+				pt_entry.pointer = (PPTE) (pd_entry.value.pfn << PAGE_SHIFT) + va.pt_index;
+				// printf("PTE 0x%llx\n", pt_entry.pointer);
+				debug::printf_d(debug::LogLevel::LOG, "PTE 0x%llx\n", pt_entry.pointer);
+				if (dc.ReadOverMapViewOfSection((UINT64)pt_entry.pointer,
+					sizeof(PTE), (UINT8*)&pt_entry.value))
+				{
+					debug::printf_d(debug::LogLevel::LOG, "%llx\n", (pt_entry.value.pfn << PAGE_SHIFT) + va.offset);
+					
+					if (VATableEntriesRetRequest != NULL)
+					{
+						VATableEntriesRetRequest->pt_entry = pt_entry;
+						VATableEntriesRetRequest->pd_entry = pd_entry;
+						VATableEntriesRetRequest->pdp_entry = pdp_entry;
+						VATableEntriesRetRequest->pml4_entry = pml4_entry;
+						debug::printf_d(debug::LogLevel::LOG, "RET TABLE ENTRIES\n");
+					}
+					return (VOID*)(pt_entry.value.pfn << PAGE_SHIFT + va.offset);
+				}
+			}
+		}
+	}
+
+	debug::printf_d(debug::LogLevel::ERR, "CANNOT CONVER VA TO PA\n");
+	return (VOID*) -1;
+}
+
+PVOID PageStealer::GetKPROCESSByPID(DWORD PID)
+{
+	std::set<ULONG_PTR> EprocessCandidates = GetEprocessCandidatesByPID(PID);
+	if (EprocessCandidates.size() >= 1)
+	{
+		printf("Eprocess candidates >= 1. Just pick first(aka *begin())\n");
+		PVOID ret = (PVOID)(*EprocessCandidates.begin());
+		return ret;
+	}
+
+	return 0;
+}
+
+PVOID PageStealer::GetDirectoryTableFromKPROCESS(PVOID KPROCESS_)
+{
+	UINT64 KPROCESS = (UINT64)KPROCESS_;
+	CoreDBG coreDbg;
+	UINT64 DirBaseOffset = coreDbg.getFieldOffset((char*)"_KPROCESS", (char*)"DirectoryTableBase");
+
+	DriverControl& dc = DriverControl::GetInstance();
+	UINT64 DirBaseAddress = { 0 };
+
+	if (dc.ReadKernelVA(KPROCESS + DirBaseOffset, 8, (UINT8*)&DirBaseAddress))
+	{
+		return (PVOID)DirBaseAddress;
+	}
+	else
+	{
+		return NULL;
+	}
+}
+
+PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount)
+{
+	PVOID DirectoryTable = GetDirectoryTableFromKPROCESS((PVOID)KPROCESS);
+
+	if ((PA & 0xFFF) != 0)
+	{
+		debug::printf_d(debug::LogLevel::ERR, "%S: PA should be aligned\n");
+		// return NULL;
+	}
+
+	// 1. get free virtual address
+	
+
+	VIRTUAL_ADDRESS va = { (PVOID) malloc(PAGE_SIZE)};
+	
+	PAGE_ENTRY<PML4E> pml4_entry = { 0 };
+
+	DriverControl& dc = DriverControl::GetInstance();
+	BOOL FailFlag = true;
+
+	VirtualAddressTableEntries VATableEntries = { 0 };
+	VTOP((UINT64)va.value, KPROCESS, &VATableEntries);
+
+
+	//for (unsigned int PML4Iterator = 0; PML4Iterator < 512; PML4Iterator++)
+	//{
+	//	if (dc.ReadOverMapViewOfSection((UINT64)DirectoryTable + sizeof(PML4E) * PML4Iterator, sizeof(PML4E), (UINT8*)&pml4_entry.value.value))
+	//	{
+	//		if (!pml4_entry.value.present)
+	//		{
+				// fix this entry
+				pml4_entry.value.present = 0;
+				pml4_entry.value.writable = 1;
+				pml4_entry.value.user_access = 1;
+				pml4_entry.value.accessed = 1;
+				pml4_entry.value.ignored_3 = 1;
+				pml4_entry.value.ignored_2 = 8;
+				pml4_entry.value.ignored_1 = 0xa0;
+
+				FailFlag = false;
+	/*			break;
+			}
+		}
+	}*/
+
+	if (FailFlag)
+	{
+		debug::printf_d(debug::LogLevel::ERR, "CANNOT FIND FREE PML4");
+		return NULL;
+	}
+
+	PAGE_ENTRY<PDPE> pdp_entry = { 0 };
+	pdp_entry.value.present = 0; // fix me
+	pdp_entry.value.writable = 1;
+	pdp_entry.value.user_access = 1;
+	pdp_entry.value.accessed = 1;
+	pdp_entry.value.ignored_3 = 1;
+	pdp_entry.value.ignored_2 = 8;
+	pdp_entry.value.ignored_1 = 0xa0;
+
+	PAGE_ENTRY<PDE> pd_entry = { 0 };
+	pd_entry.value.present = 0;	// fix me
+	pd_entry.value.writable = 1;
+	pd_entry.value.user_access = 1;
+	pd_entry.value.accessed = 1;
+	pd_entry.value.ignored_2 = 8;
+	pd_entry.value.ignored_1 = 0xa0;
+	pd_entry.value.ignored1 = 0x1;
+
+	PAGE_ENTRY<PTE> pt_entry = { 0 };
+	pt_entry.value.present = 0;	// fix me
+	pt_entry.value.writable = 1;
+	pt_entry.value.user_access = 1;
+	pt_entry.value.accessed = 1;
+	pt_entry.value.dirty = 1;
+	pt_entry.value.ignored_2 = 4;
+	pt_entry.value.ignored_3 = 0x10;
+
+
+	pt_entry.value.pfn = 0;
+
+	pml4_entry.pointer = (PPML4E)DirectoryTable + va.pml4_index;
+	debug::printf_d(debug::LogLevel::ERR, "PML4E 0x%llx\n", pml4_entry.pointer);
+
+	//if (dc.WriteOverMapViewOfSection((UINT64)pml4_entry.pointer,
+	//	sizeof(PML4E), (UINT8*)&pml4_entry.value.value))
+	//{
+	//	pdp_entry.pointer = (PPDPE)(pml4_entry.value.pfn << PAGE_SHIFT) + va.pdp_index;
+	//	debug::printf_d("PDPE 0x%llx\n", pdp_entry.pointer);
+
+	//	if (dc.WriteOverMapViewOfSection((UINT64)pdp_entry.pointer,
+	//		sizeof(PDPE), (UINT8*)&pdp_entry.value))
+	//	{
+	//		pd_entry.pointer = (PPDE)(pdp_entry.value.pfn << PAGE_SHIFT) + va.pd_index;
+	//		debug::printf_d("PDE 0x%llx\n", pd_entry.pointer);
+
+	//		if (dc.WriteOverMapViewOfSection((UINT64)pd_entry.pointer,
+	//			sizeof(PDE), (UINT8*)&pd_entry.value))
+	//		{
+	//			pt_entry.pointer = (PPTE)(pd_entry.value.pfn << PAGE_SHIFT) + va.pt_index;
+	//			// printf("PTE 0x%llx\n", pt_entry.pointer);
+	//			debug::printf_d("PTE 0x%llx\n", pt_entry.pointer);
+	//			if (dc.WriteOverMapViewOfSection((UINT64)pt_entry.pointer,
+	//				sizeof(PTE), (UINT8*)&pt_entry.value))
+	//			{
+	//				debug::printf_d("%llx\n", (pt_entry.value.pfn << PAGE_SHIFT) + va.offset);
+	//				return (VOID*)(pt_entry.value.pfn << PAGE_SHIFT + va.offset);
+	//			}
+	//		}
+	//	}
+	//}
+
+	return NULL;
+}
+
+BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID, UINT64 va_, BOOL MakePageWritable)
+{
+	VIRTUAL_ADDRESS va = { (PVOID) va_ };
+
+	if (SourcePID == -1 || DestPID == -1 || SourcePID == 0 || DestPID == 0)
+	{
+		debug::printf_d(debug::LogLevel::ERR, "%S WRONG ARG (PID)\n", __func__);
+		return FALSE;
+	}
+
+	UINT64 SourceDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPID(SourcePID));
+	UINT64 DestDirTable = (UINT64)GetDirectoryTableFromKPROCESS(GetKPROCESSByPID(DestPID));
+
+	// get table entries from source process
+	VirtualAddressTableEntries SourceTableEntries = { 0 };
+	VTOP((UINT64) va.value, (UINT64) GetKPROCESSByPID(SourcePID), &SourceTableEntries);
+	if (!(SourceTableEntries.pt_entry.value.present
+		& SourceTableEntries.pd_entry.value.present
+		& SourceTableEntries.pdp_entry.value.present
+		& SourceTableEntries.pml4_entry.value.present))
+	{
+		debug::printf_d(debug::LogLevel::ERR, "%S TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE\n", __func__);
+		return FALSE;
+	}
+
+	if (MakePageWritable)
+	{
+		SourceTableEntries.pt_entry.value.writable = 1;
+		SourceTableEntries.pt_entry.value.dirty = 1;
+
+		SourceTableEntries.pd_entry.value.writable = 1;
+		// SourceTableEntries.pd_entry.value.dirty = 1;
+
+		SourceTableEntries.pdp_entry.value.writable = 1;
+		// SourceTableEntries.pdp_entry.value.dirty = 1;
+
+		SourceTableEntries.pml4_entry.value.writable = 1;
+		// SourceTableEntries.pml4_entry.value.dirty = 1;
+	};
+
+	// get table entries from dest 
+	VirtualAddressTableEntries OriginalDestTableEntries = { 0 };
+	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPID(DestPID), &OriginalDestTableEntries);
+
+	//VirtualAddressTableEntries DestTableEntries = SourceTableEntries;
+	//DestTableEntries.pml4_entry.pointer = (PPML4E)DestDirTable + va.pml4_index;
+	//DestTableEntries.pdp_entry.pointer = (PPDPE)(SourceTableEntries.pml4_entry.value.pfn << PAGE_SHIFT) + va.pdp_index;
+	//DestTableEntries.pd_entry.pointer = (PPDE)(SourceTableEntries.pdp_entry.value.pfn << PAGE_SHIFT) + va.pd_index;
+	//DestTableEntries.pt_entry.pointer = (PPTE)(SourceTableEntries.pd_entry.value.pfn << PAGE_SHIFT) + va.pt_index;
+	
+	DriverControl& dc = DriverControl::GetInstance();
+
+	// debug::printf_d(debug::LogLevel::FATAL, "%S I'LL BSOD\n", __func__);
+
+	if (!OriginalDestTableEntries.pml4_entry.value.present)
+	{
+		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pml4_entry.pointer,
+			sizeof(PML4E), (UINT8*)&SourceTableEntries.pml4_entry.value.value);
+
+	}
+	if (!OriginalDestTableEntries.pdp_entry.value.present)
+	{
+		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pdp_entry.pointer,
+			sizeof(PDPE), (UINT8*)&SourceTableEntries.pdp_entry.value.value);
+	}
+	if (!OriginalDestTableEntries.pd_entry.value.present)
+	{
+		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pd_entry.pointer,
+			sizeof(PDE), (UINT8*)&SourceTableEntries.pd_entry.value.value);
+	}
+	if (!OriginalDestTableEntries.pt_entry.value.present)
+	{
+		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pt_entry.pointer,
+			sizeof(PTE), (UINT8*)&SourceTableEntries.pt_entry.value.value);
+	}
+
+	DWORD OldProtect = 0;
+	MEMORY_BASIC_INFORMATION info = { 0 };
+	SIZE_T len = VirtualQuery(va.value, &info, sizeof(info));
+
+	BOOL bRes = VirtualProtect(va.value,
+		1024,
+		PAGE_EXECUTE_READWRITE,
+		&OldProtect);
+	DWORD LE = GetLastError();
+	*(UINT32*)(va.value) = 3;
+
+	return FALSE;
+}
+
