@@ -11,10 +11,14 @@ private:
 	DbgHelpWrapper DbgPdb;
 	PE pe;
 	char* getPdb();
-
-public:
 	CoreDBG();
 	~CoreDBG();
+
+public:
+	static inline CoreDBG& GetInstance() {
+		static CoreDBG instance;
+		return instance;
+	}
 
 	ULONG64 getFieldOffset(char* typeName, char* fieldName);
 	ULONG64 getKernelSymbolAddress(char* symbolName);

@@ -62,49 +62,47 @@ void DiaHelpWrapper::initialize(char* pdfFile) {
 	return;
 }
 
-bool DiaHelpWrapper::getAllRootChildren(IDiaEnumSymbols ** enu) {
-	if (SUCCEEDED(gDiaRoot->findChildren(SymTagNull,
-		NULL,
-		nsNone,
-		enu)))
-		return true;
-	else
-		return false;
-}
 
-void DiaHelpWrapper::printAllEnum(IDiaEnumSymbols * enu) {
-	IDiaSymbol *sym;
+void DiaHelpWrapper::printAllEnum(IDiaEnumSymbols* enu) {
+	CComPtr<IDiaSymbol> sym;
 	ULONG celt = 0;
 	enu->Reset();
-	HRESULT hr = enu->Next(1, &sym, &celt);
-	while (SUCCEEDED(hr = enu->Next(1, &sym, &celt)) &&
+	BSTR name;
+
+	while (SUCCEEDED(enu->Next(1, &sym, &celt)) &&
 		celt == 1) {
-		BSTR name;
 
 		if (SUCCEEDED(sym->get_name(&name)))
-			;//printf(" - %S\n", name);
-
+			printf(" - %S\n", name);
+		sym = 0;
 	};
 
 	return;
 }
 
-bool DiaHelpWrapper::getSymbolByName(IDiaEnumSymbols * enu, wchar_t* symbolName, IDiaSymbol** symbol) {
-	IDiaSymbol *sym;
+bool DiaHelpWrapper::getSymbolByName(IDiaEnumSymbols* enu, wchar_t* symbolName, IDiaSymbol** symbol) {
+	CComPtr<IDiaSymbol> sym;
 	ULONG celt = 0;
 	enu->Reset();
 	//HRESULT hr = enu->Next(1, &sym, &celt);
+	BSTR name = {};
 
 	while (SUCCEEDED(enu->Next(1, &sym, &celt)) &&
 		celt == 1) {
-		BSTR name;
 
 		if (SUCCEEDED(sym->get_name(&name)))
+		{
+
 			if (!wcscmp(name, symbolName)) {
 				*symbol = sym;
+				SysFreeString(name);
+				name = NULL;
 				return true;
 			}
-				
+			SysFreeString(name);
+
+		}
+		sym = 0;
 	};
 
 	return false;
@@ -113,9 +111,9 @@ bool DiaHelpWrapper::getSymbolByName(IDiaEnumSymbols * enu, wchar_t* symbolName,
 void DiaHelpWrapper::getSymInfo(IDiaSymbol* symbol) {
 	BSTR name;
 	if (SUCCEEDED(symbol->get_name(&name)))
-		;//printf("%S\n", name);
+		printf("%S\n", name);
 	else
-		;// printf("get_name err\r\n");
+		printf("get_name err\r\n");
 	return;
 }
 
@@ -124,9 +122,13 @@ bool DiaHelpWrapper::getSymbolChildren(IDiaSymbol* symbol, IDiaEnumSymbols ** en
 		NULL,
 		nsNone,
 		enu)))
+	{
 		return true;
-	else 
+	}
+	else
+	{
 		return false;
+	}
 
 }
 
@@ -146,21 +148,27 @@ bool DiaHelpWrapper::getSymbolType(IDiaSymbol* symbol, IDiaSymbol** symbolType) 
 
 bool DiaHelpWrapper::getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fieldName, LONG* symbolOffset) {
 	
-	IDiaEnumSymbols *enu;
-	bool status = getAllRootChildren(&enu);
-	if (status) {
+	CComPtr<IDiaEnumSymbols> enu;
+	if (!gDiaRoot->findChildren(SymTagNull,
+		NULL,
+		nsNone,
+		&enu)) 
+	{
 		enu->Reset();
-		IDiaSymbol* sym;
-		status = getSymbolByName(enu, typeName, &sym);
+		CComPtr<IDiaSymbol> sym;
+		bool status = getSymbolByName(enu, typeName, &sym);
 		if (status) {
-			status = getSymbolChildren(sym, &enu);
+			CComPtr<IDiaEnumSymbols> EnuInner;
+			status = getSymbolChildren(sym, &EnuInner);
 			if (status) {
-				printAllEnum(enu);
-				enu->Reset();
-				status = getSymbolByName(enu, fieldName, &sym);
+				// printAllEnum(EnuInner);
+				EnuInner->Reset();
+
+				CComPtr<IDiaSymbol> SymInner;
+				status = getSymbolByName(EnuInner, fieldName, &SymInner);
 
 				if (status) {
-					if (SUCCEEDED(sym->get_offset(symbolOffset)))
+					if (SUCCEEDED(SymInner->get_offset(symbolOffset)))
 						return true;
 					else
 						printf("getSymbolOffsetInKernelType cant get_offset");

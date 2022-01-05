@@ -11,9 +11,10 @@ DbgHelpWrapper::~DbgHelpWrapper() {
 }
 
 BOOL DbgHelpWrapper::InitializeDbgHelp(LPSTR SymbolsPath) {
-	if (SymbolsPath == NULL) SymbolsPath = (LPSTR)DefaultSymbolsPath;
+	if (SymbolsPath == NULL) 
+		SymbolsPath = (LPSTR)DefaultSymbolsPath;
 
-	SymSetOptions(0x10C13);
+	SymSetOptions(SYMOPT_UNDNAME);	// possible WRONG
 	if (IsInitialized) 
 		DeinitializeDbgHelp();
 
@@ -50,7 +51,8 @@ BOOL DbgHelpWrapper::GetRootSymbol(LPSTR SymbolName, PULONG SymbolIndex) {
 	SYMBOL_INFO SymbolInfo;
 	SymbolInfo.SizeOfStruct = sizeof(SymbolInfo);
 	BOOL Status = SymGetTypeFromName(hProcess, ModuleBase, SymbolName, &SymbolInfo);
-	if (Status) *SymbolIndex = SymbolInfo.Index;
+	if (Status) 
+		*SymbolIndex = SymbolInfo.Index;
 	return Status;
 }
 

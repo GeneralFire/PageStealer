@@ -5,10 +5,10 @@
 #include <stdexcept>
 
 #define DEBUG_LOG_LEVEL 0 // 0 > 1 > 2
+
 class debug
 {
 public:
-	
 
 	enum class LogLevel
 	{

@@ -97,11 +97,13 @@ ULONG64 CoreDBG::getFieldOffset(char* typeName_, char* fieldName_) {
 	mbstowcs_s(NULL, fieldName, strlen(fieldName_) + 1, fieldName_, strlen(fieldName_));
 
 	LONG offset = 0;
-	if (DiaPdb.getSymbolOffsetInKernelType(typeName, fieldName, &offset))
-		return offset;
-	else
-		return -1;
-
+	if (!DiaPdb.getSymbolOffsetInKernelType(typeName, fieldName, &offset))
+	{
+		offset = -1;
+	}
+	delete typeName;
+	delete fieldName;
+	return offset;
 }
 
 ULONG64 CoreDBG::getKernelSymbolAddress(char* symbolName) {

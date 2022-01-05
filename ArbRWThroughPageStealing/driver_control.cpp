@@ -645,6 +645,10 @@ bool DriverControl::ReadKernelVA(UINT64 va, UINT64 size, UINT8* outbuffer) {
 
     DWORD total_page_count = static_cast<DWORD>((end_page_addr - start_page_addr + 1) / kPageSize);
     UINT8* buffer = (UINT8*)malloc(total_page_count * kPageSize);
+    if (buffer == NULL)
+    {
+        return false;
+    }
     DWORD not_success_iters = 0;
     
     for (unsigned int i = 0; i < total_page_count; ++i) {

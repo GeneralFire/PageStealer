@@ -5,12 +5,13 @@
 #include <stdio.h>
 #include "ResourceLoader.h"
 #include "debug.hpp"
+#include <atlbase.h>
 
 class DiaHelpWrapper {
 private:
-	IDiaDataSource* gpDiaSource;
-	IDiaSession* gpDiaSession;
-	IDiaSymbol* gDiaRoot;
+	CComPtr<IDiaDataSource> gpDiaSource;
+	CComPtr<IDiaSession> gpDiaSession;
+	CComPtr<IDiaSymbol> gDiaRoot;
 
 public:
 	BOOL    IsInitialized = FALSE;
@@ -20,15 +21,14 @@ public:
 	void initialize(char* pdfFile);
 
 	// root // sym children
-	bool getAllRootChildren(IDiaEnumSymbols ** enu);
 	bool getSymbolChildren(IDiaSymbol* symbol, IDiaEnumSymbols ** enu);
 
 
-	bool getSymbolByName(IDiaEnumSymbols * enu, wchar_t* symbolName, IDiaSymbol** symbol);
+	bool getSymbolByName(IDiaEnumSymbols* enu, wchar_t* symbolName, IDiaSymbol** symbol);
 
 	// symbol info
 	void getSymInfo(IDiaSymbol* symbol);
-	void printAllEnum(IDiaEnumSymbols * enu);
+	void printAllEnum(IDiaEnumSymbols* enu);
 
 	bool getSymbolOffset(IDiaSymbol* symbol, LONG* symbolOffset);
 	bool getSymbolType(IDiaSymbol* symbol, IDiaSymbol** symbolType);

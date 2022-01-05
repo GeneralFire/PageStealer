@@ -6,18 +6,28 @@
 
 int main()
 {
-    DWORD PID1 = PageStealer::GetPIDByName(L"ArbRWThroughPageStealing.exe");
+    CoreDBG& coreDbg = CoreDBG::GetInstance();
 
-    DWORD NotepadPID = PageStealer::GetPIDByName(L"RobocraftClient.exe");
+
+    //while (1)
+    //{
+    //    UINT64 a = coreDbg.getKernelSymbolAddress((char*)"MiState");
+    //    a = coreDbg.getKernelSymbolAddress((char*)"MiVisibleState");
+    //    a = coreDbg.getKernelSymbolAddress((char*)"MiState");
+    //}
+    DWORD DestPID = PageStealer::GetPIDByName(L"ArbRWThroughPageStealing.exe");
+
+    DWORD SourcePID = PageStealer::GetPIDByName(L"mspaint.exe");
 
     // PPML4T pPml4T = static_cast<PPML4T>(PageStealer::GetProceessPageTableL4(PID1));
 
-    PVOID pa = PageStealer::VTOP((UINT64)&PID1, (UINT64) PageStealer::GetKPROCESSByPID(PID1), NULL);
+    PVOID pa = PageStealer::VTOP((UINT64)&DestPID, (UINT64) PageStealer::GetKPROCESSByPID(DestPID), NULL);
 
+    
     // PVOID va =  PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace((UINT64) PageStealer::GetKPROCESSByPID(PID), 0x13000, 3);
-    PageStealer::MapVirtualPageToAnotherProcess(NotepadPID,
-        PID1,
-        0x400000,
+    PageStealer::MapVirtualPageToAnotherProcess(SourcePID,
+        DestPID,
+        0x7FF675BB4000,
         TRUE);
 
     return 0;
