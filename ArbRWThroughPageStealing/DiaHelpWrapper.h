@@ -3,7 +3,8 @@
 #include <dia2.h>
 #include <assert.h>
 #include <stdio.h>
-
+#include "ResourceLoader.h"
+#include "debug.hpp"
 
 class DiaHelpWrapper {
 private:

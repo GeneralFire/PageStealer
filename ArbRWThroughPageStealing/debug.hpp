@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <cstdarg>
 #include <exception>
+#include <stdexcept>
 
 #define DEBUG_LOG_LEVEL 0 // 0 > 1 > 2
 class debug

@@ -14,7 +14,8 @@ void debug::printf_d(LogLevel level, const char* format, ...)
     }
     if (level == debug::LogLevel::FATAL)
     {
-        throw std::inv
+        throw std::invalid_argument("FATAL ERROR CHANCE\n");
+        exit(-1);
 
     }
 }

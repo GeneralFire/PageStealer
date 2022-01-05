@@ -11,11 +11,13 @@ DiaHelpWrapper::DiaHelpWrapper() {
 DiaHelpWrapper::~DiaHelpWrapper() {
 	IsInitialized = FALSE;
 	CoUninitialize();
+	
 }
 
 void DiaHelpWrapper::initialize(char* pdfFile) {
 	wchar_t * vOut = new wchar_t[strlen(pdfFile) + 1];
 	mbstowcs_s(NULL, vOut, strlen(pdfFile) + 1, pdfFile, strlen(pdfFile));
+
 
 	HRESULT hr = CoInitialize(NULL);
 	if (FAILED(hr))
@@ -28,32 +30,9 @@ void DiaHelpWrapper::initialize(char* pdfFile) {
 		(void**) &gpDiaSource);
 
 	if (FAILED(hr)) {
-		//printf("CoCreateInstance err %lx. [1] \ncall regsvr32 msdia140X.dll", hr);
-		char cmdBuffer[0x100];
 
-		TCHAR NPath[MAX_PATH];
-		GetCurrentDirectory(MAX_PATH, NPath);
-
-		char* buf = nullptr;
-		size_t sz = 0;
-		if (FAILED(_dupenv_s(&buf, &sz, "WINDIR")))
-			;// fatal((char*)"_DiaHelpWrapper:initialize _dupenv_s err");
-
-#ifdef _WIN64
-		sprintf_s(cmdBuffer, "%s\\System32\\regsvr32.exe %S\\MsdiaDlls\\msdia140_x32.dll", buf, NPath);
-		//printf("cmd: %s\n", cmdBuffer);
-		system(cmdBuffer);
-
-		sprintf_s(cmdBuffer, "%s\\System32\\regsvr32.exe %S\\MsdiaDlls\\msdia140_x64.dll", buf, NPath);
-		//printf("cmd: %s\n", cmdBuffer);
-		system(cmdBuffer);
-#else
-		sprintf_s(cmdBuffer, "%s\\SysWoW64\\regsvr32.exe %S\\MsdiaDlls\\msdia140_x32.dll /s", buf, NPath);
-		//printf("cmd: %s\n", cmdBuffer);
-		system(cmdBuffer);
-
-#endif // _WIN32
-
+		ResourceLoader rs;
+		rs.extractAndInstallMsdiaDlls(); // register MsDiaDlls
 
 		hr = CoCreateInstance(__uuidof(DiaSource),
 			NULL,
@@ -62,7 +41,9 @@ void DiaHelpWrapper::initialize(char* pdfFile) {
 			(void**)&gpDiaSource);
 
 		if (FAILED(hr))
-			;// fatalStatus((char*)"CoCreateInstance failed[2]\n", hr);
+			debug::printf_d(debug::LogLevel::FATAL, (char*)"CoCreateInstance failed[2]\n", hr);
+
+		rs.removeMsdiaDlls();
 	}
 
 	hr = gpDiaSource->loadDataFromPdb(vOut);

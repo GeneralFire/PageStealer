@@ -3,7 +3,10 @@
 #include "globals.h"
 
 
-
+ResourceLoader::ResourceLoader()
+{
+	currentMode = GetCurrentMode();
+}
 
 BOOL ResourceLoader::unmapDrv() {
 
@@ -48,6 +51,20 @@ std::wstring ResourceLoader::extractResource(ResId resId) {
 			fileSize = sizeof(resource_array::atzio_32);
 			pData = (UINT64)resource_array::atzio_32;
 			break;
+
+		case ResId::MsDiaX64:
+			fileSize = sizeof(resource_array::msdia_64);
+			pData = (UINT64)resource_array::msdia_64;
+			break;
+
+		case ResId::MsDiaX32:
+			fileSize = sizeof(resource_array::msdia_32);
+			pData = (UINT64)resource_array::msdia_32;
+			break;
+
+		default:
+			debug::printf_d(debug::LogLevel::FATAL, "UNABLE TO EXTRACT RESOURCE");
+
 		
 	}
 	
@@ -347,3 +364,56 @@ BOOL ResourceLoader::mapDrv() {
 
 	return bRes;
 }
+
+
+BOOL ResourceLoader::extractAndInstallMsdiaDlls()
+{
+	std::wstring pathToExtractedDllX32, pathToExtractedDllX64;
+
+	if (currentMode == CurrentMode::x86UnderX64
+		|| currentMode == CurrentMode::x64)
+	{
+		pathToExtractedDllX64 = extractResource(ResId::MsDiaX64);
+		pathToExtractedDllX32 = extractResource(ResId::MsDiaX32);
+	}
+	else if (currentMode == CurrentMode::x86)
+	{
+		pathToExtractedDllX32 = extractResource(ResId::MsDiaX32);
+	}
+
+
+	//printf("CoCreateInstance err %lx. [1] \ncall regsvr32 msdia140X.dll", hr);
+	char cmdBuffer[0x100];
+
+	char* buf = nullptr;
+	size_t sz = 0;
+	if (FAILED(_dupenv_s(&buf, &sz, "WINDIR")))
+		debug::printf_d(debug::LogLevel::ERR, (char*)"_DiaHelpWrapper:initialize _dupenv_s err");
+
+#ifdef _WIN64
+	sprintf_s(cmdBuffer, "%s\\System32\\regsvr32.exe %S /s", buf, pathToExtractedDllX64.c_str());
+	//printf("cmd: %s\n", cmdBuffer);
+	system(cmdBuffer);
+
+	sprintf_s(cmdBuffer, "%s\\System32\\regsvr32.exe %S /s", buf, pathToExtractedDllX32.c_str());
+	//printf("cmd: %s\n", cmdBuffer);
+	system(cmdBuffer);
+#else
+	sprintf_s(cmdBuffer, "%s\\SysWoW64\\regsvr32.exe %S /s", buf, pathToExtractedDllX32.c_str());
+	//printf("cmd: %s\n", cmdBuffer);
+	system(cmdBuffer);
+
+#endif // _WIN32
+
+
+	return TRUE;
+}
+
+BOOL ResourceLoader::removeMsdiaDlls()
+{
+	_wremove(getResourcePath(ResId::MsDiaX32).c_str());
+	_wremove(getResourcePath(ResId::MsDiaX64).c_str());
+
+	return TRUE;
+}
+

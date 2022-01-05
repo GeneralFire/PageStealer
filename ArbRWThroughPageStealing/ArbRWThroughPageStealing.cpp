@@ -8,7 +8,7 @@ int main()
 {
     DWORD PID1 = PageStealer::GetPIDByName(L"ArbRWThroughPageStealing.exe");
 
-    DWORD NotepadPID = PageStealer::GetPIDByName(L"notepad++.exe");
+    DWORD NotepadPID = PageStealer::GetPIDByName(L"RobocraftClient.exe");
 
     // PPML4T pPml4T = static_cast<PPML4T>(PageStealer::GetProceessPageTableL4(PID1));
 
@@ -17,7 +17,8 @@ int main()
     // PVOID va =  PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace((UINT64) PageStealer::GetKPROCESSByPID(PID), 0x13000, 3);
     PageStealer::MapVirtualPageToAnotherProcess(NotepadPID,
         PID1,
-        0x7FF615731000,
+        0x400000,
         TRUE);
+
     return 0;
 }

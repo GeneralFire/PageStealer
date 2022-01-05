@@ -381,7 +381,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 
 	if (SourcePID == -1 || DestPID == -1 || SourcePID == 0 || DestPID == 0)
 	{
-		debug::printf_d(debug::LogLevel::ERR, "%S WRONG ARG (PID)\n", __func__);
+		debug::printf_d(debug::LogLevel::ERR, "%s WRONG ARG (PID)\n", __func__);
 		return FALSE;
 	}
 
@@ -396,7 +396,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 		& SourceTableEntries.pdp_entry.value.present
 		& SourceTableEntries.pml4_entry.value.present))
 	{
-		debug::printf_d(debug::LogLevel::ERR, "%S TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE\n", __func__);
+		debug::printf_d(debug::LogLevel::ERR, "%s TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE\n", __func__);
 		return FALSE;
 	}
 
@@ -427,7 +427,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 	
 	DriverControl& dc = DriverControl::GetInstance();
 
-	// debug::printf_d(debug::LogLevel::FATAL, "%S I'LL BSOD\n", __func__);
+	// debug::printf_d(debug::LogLevel::FATAL, "%s I'LL BSOD\n", __func__);
 
 	if (!OriginalDestTableEntries.pml4_entry.value.present)
 	{
@@ -465,3 +465,8 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 	return FALSE;
 }
 
+BOOL PageStealer::StealEntireVirtualAddressSpace(DWORD SourcePID, DWORD DestPID, UINT64 va_)
+{
+
+	return FALSE;
+}

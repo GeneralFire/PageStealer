@@ -20,6 +20,8 @@ public:
 	static PVOID VTOP(UINT64 va, UINT64 KPROCESS, PVirtualAddressTableEntries ret);
 	static PVOID MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount);
 	static BOOL MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID, UINT64 VA, BOOL MakePageWritable);
+	static BOOL StealEntireVirtualAddressSpace(DWORD SourcePID, DWORD DestPID, UINT64 va_);
+
 private:
 	
 	static std::set<ULONG_PTR> GetEprocessCandidatesByPID(DWORD PID);

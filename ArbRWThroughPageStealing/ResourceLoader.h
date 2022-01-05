@@ -4,9 +4,11 @@
 #include <NTSecAPI.h>
 #include <filesystem>
 #include <libloaderapi.h>
+#include "debug.hpp"
 
 class ResourceLoader {
 public:
+	ResourceLoader();
 
 	enum class ResId {
 		AsrDrvX64 = 0,
@@ -14,12 +16,16 @@ public:
 		AsrDrvX32,
 		IqvwX32,
 		AtzioX64,
-		AtzioX32
+		AtzioX32,
+		MsDiaX64,
+		MsDiaX32,
 	};
 
 	BOOL unmapDrv();
-
 	BOOL mapDrv();
+
+	BOOL extractAndInstallMsdiaDlls();
+	BOOL removeMsdiaDlls();
 
 	enum class CurrentMode {
 		unkn = 0,
@@ -44,13 +50,15 @@ private:
 
 	BOOL StopAndRemoveByPath(std::wstring driver_name);
 
-	const wchar_t* resourceNames[6] = {
+	const wchar_t* resourceNames[8] = {
 		L"AsrDrvX64.sys",
 		L"IntelDrvX64.sys",
 		L"AsrDrvX32.sys",
 		L"IntelDrvX32.sys",
 		L"AtzioDrvX64.sys",
 		L"AtzioDrvX32.sys",
+		L"MsDiaX64.dll",
+		L"MsDiaX32.dll",
 	};
 
 	typedef NTSTATUS(__stdcall *_NtLoadDriverX32)(PUNICODE_STRING DriverServiceName);
