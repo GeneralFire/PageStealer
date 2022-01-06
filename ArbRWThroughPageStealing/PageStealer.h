@@ -13,17 +13,26 @@
 class PageStealer
 {
 public:
+	typedef struct _ProcessMinimalInfo
+	{
+		DWORD PID;
+		UCHAR ImageFileName[15];
+	} PROCESS_MINIMAL_INFO, * PPROCESS_MINIMAL_INFO;
 
-	static PVOID GetKPROCESSByPID(DWORD PID);
-	static PVOID GetProceessPageTableL4(DWORD PID);
-	static DWORD GetPIDByName(std::wstring ProcessName);
+	static PROCESS_MINIMAL_INFO GetPMIByProcessName(std::string ProcessName);
+	
+	static PVOID GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
+	static PVOID GetProceessPageTableL4(PPROCESS_MINIMAL_INFO PMI);
+	
 	static PVOID VTOP(UINT64 va, UINT64 KPROCESS, PVirtualAddressTableEntries ret);
 	static PVOID MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount);
-	static BOOL MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID, UINT64 VA, BOOL MakePageWritable);
-	static BOOL StealEntireVirtualAddressSpace(DWORD SourcePID, DWORD DestPID, UINT64 va_);
+	static BOOL MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 VA, BOOL MakePageWritable);
+	static BOOL StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 VA);
 
 private:
 	
-	static UINT64 GetEprocessCandidatesByPID(DWORD PID);
+	
+	static DWORD GetPIDByName(std::wstring ProcessName);
+	static UINT64 _GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
 	static PVOID GetDirectoryTableFromKPROCESS(PVOID KPROCESS);
 };

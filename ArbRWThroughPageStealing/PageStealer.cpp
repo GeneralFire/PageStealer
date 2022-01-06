@@ -6,12 +6,12 @@
 /// <param name="PID">target process PID</param>
 /// <returns>Directory Table content; allocates buffer internally</returns>
 /// 
-VOID* PageStealer::GetProceessPageTableL4(DWORD PID)
+VOID* PageStealer::GetProceessPageTableL4(PPROCESS_MINIMAL_INFO PMI)
 {
 	printf("%s FIX ME\n", __func__);
 	return (VOID*)NULL;
 
-	UINT64 EPROCESSAddr = (UINT64)GetKPROCESSByPID(PID);
+	UINT64 EPROCESSAddr = (UINT64)GetKPROCESSByPMI(PMI);
 	
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
 	UINT64 DirBaseOffset = coreDbg.getFieldOffset((wchar_t*)L"_KPROCESS", (wchar_t*)L"DirectoryTableBase");
@@ -59,9 +59,9 @@ DWORD PageStealer::GetPIDByName(std::wstring ProcessName)
     return -1;
 }
 
-UINT64 PageStealer::GetEprocessCandidatesByPID(DWORD PID)
+UINT64 PageStealer::_GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 {
-	DWORD cPID = PID;
+	DWORD PID = PMI->PID;
 	ULONG uLength = 0;
 	// std::set<ULONG_PTR> out = {};
 
@@ -117,18 +117,34 @@ UINT64 PageStealer::GetEprocessCandidatesByPID(DWORD PID)
 		return 0;
 	}
 
+	UINT64 PIDBuffer = 0;
+	UCHAR ImageFileNameBuffer[15] = { 0 };
 	UINT64 ret = 0;
+	DriverControl& dc = DriverControl::GetInstance();
+
 	for (UINT i = 0; i < lpHandleInformation->NumberOfHandles; i++)
 	{
 		if (lpHandleInformation->Handles[i].UniqueProcessId == (DWORD)4)
 		{
-			UINT64 buffer = 0;
-			DriverControl& dc = DriverControl::GetInstance();
-			if (dc.ReadKernelVA(((UINT64)(lpHandleInformation->Handles[i].Object) + PIDOffset), 8, (UINT8*)&buffer) && buffer == PID)
+			if (dc.ReadKernelVA(((UINT64)(lpHandleInformation->Handles[i].Object) + PIDOffset), 8, (UINT8*)&PIDBuffer) && PIDBuffer == PID)
 			{
 				ret = (UINT64) lpHandleInformation->Handles[i].Object;
+				break;
 			}
 		}
+		
+		if (lpHandleInformation->Handles[i].UniqueProcessId == PMI->PID)
+		{
+			if (dc.ReadKernelVA(((UINT64)(lpHandleInformation->Handles[i].Object) + ImageFileNameOffset), 15, (UINT8*)ImageFileNameBuffer))
+			{
+				if (!memcmp(ImageFileNameBuffer, PMI->ImageFileName, 14))
+				{
+					ret = (UINT64)lpHandleInformation->Handles[i].Object;
+					break;
+				}
+			}
+		}
+
 	}
 	VirtualFree(lpBuffer, 0, MEM_RELEASE);
 	return ret;
@@ -201,15 +217,12 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 	return (VOID*) -1;
 }
 
-PVOID PageStealer::GetKPROCESSByPID(DWORD PID)
+PVOID PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 {
-	UINT64 EPROCESS = GetEprocessCandidatesByPID(PID);
+	UINT64 EPROCESS = _GetKPROCESSByPMI(PMI);
 	if (EPROCESS == 0)
 	{
-		throw std::invalid_argument("CANNOT FIND EPROCESS");
-		// debug::printf_d(debug::LogLevel::LOG, "%s Eprocess candidates >= 1. Just pick first(aka *begin())\n", __func__);
-		// PVOID ret = (PVOID) EPROCESS;
-		// return ret;
+		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT FIND EPROCESS", __func__);
 	}
 
 	return (PVOID) EPROCESS;
@@ -358,30 +371,31 @@ PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPRO
 /// <param name="va_">Virtual address in source process</param>
 /// <param name="MakePageWritable">Mark pages in destination process as writable</param>
 /// <returns>return TRUE if success, otherwise FALSE</returns>
-BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID, UINT64 va_, BOOL MarkPageWritable)
+BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 va_, BOOL MakePageWritable)
 {
 	//
 	
-	if (SourcePID == -1 || DestPID == -1 || SourcePID == 0 || DestPID == 0)
+	if (SourcePMI->PID == -1 || DestPMI->PID == -1 || SourcePMI->PID == 0 || DestPMI->PID == 0)
 	{
 		debug::printf_d(debug::LogLevel::ERR, "%s WRONG ARG (PID)\n", __func__);
 		return FALSE;
 	}
 
-	if (va_ && 0xFFF)
+	if (va_ & 0xFFF)
 	{
-		debug::printf_d(debug::LogLevel::WARN, "%s UNALIGNED VA. MAPPING WHOLE PAGE\n", __func__);
-		va_ = (va_ >> 12) << 12;
+		UINT64 mask = -1 & ~0xFFF;
+		debug::printf_d(debug::LogLevel::WARN, "%s UNALIGNED VA(0x%llx). MAPPING WHOLE PAGE(0x%llx)\n", __func__, va_, va_ & mask);	
+		va_ &= mask;
 	}
 
 	VIRTUAL_ADDRESS va = { (PVOID)va_ };
 
-	UINT64 SourceDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPID(SourcePID));
-	UINT64 DestDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPID(DestPID));
+	UINT64 SourceDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPMI(SourcePMI));
+	UINT64 DestDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPMI(DestPMI));
 
 	// get table entries from source process
 	VirtualAddressTableEntries SourceTableEntries = { 0 };
-	VTOP((UINT64) va.value, (UINT64) GetKPROCESSByPID(SourcePID), &SourceTableEntries);
+	VTOP((UINT64) va.value, (UINT64) GetKPROCESSByPMI(SourcePMI), &SourceTableEntries);
 	if (!(SourceTableEntries.pt_entry.value.present
 		& SourceTableEntries.pd_entry.value.present
 		& SourceTableEntries.pdp_entry.value.present
@@ -393,7 +407,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 
 	// get table entries from dest 
 	VirtualAddressTableEntries OriginalDestTableEntries = { 0 };
-	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPID(DestPID), &OriginalDestTableEntries);
+	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(SourcePMI), &OriginalDestTableEntries);
 	if ((OriginalDestTableEntries.pt_entry.value.present
 		& OriginalDestTableEntries.pd_entry.value.present
 		& OriginalDestTableEntries.pdp_entry.value.present
@@ -403,7 +417,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 		return FALSE;
 	}
 
-	HANDLE DestProcessHandle = OpenProcess(PROCESS_VM_OPERATION, TRUE, DestPID);
+	HANDLE DestProcessHandle = OpenProcess(PROCESS_VM_OPERATION, TRUE, DestPMI->PID);
 	if (DestProcessHandle == INVALID_HANDLE_VALUE)
 	{
 		debug::printf_d(debug::LogLevel::ERR, "%s CANNOT OPEN PROCESS\n", __func__);
@@ -412,7 +426,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 
 	PVOID VirtualAllocRes = NULL;
 	
-	if (MarkPageWritable)
+	if (MakePageWritable)
 	{
 		VirtualAllocRes = VirtualAllocEx(DestProcessHandle, (PVOID)va.value, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
 	}
@@ -481,8 +495,25 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 	return FALSE;
 }
 
-BOOL PageStealer::StealEntireVirtualAddressSpace(DWORD SourcePID, DWORD DestPID, UINT64 va_)
+BOOL PageStealer::StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 va_)
 {
 
 	return FALSE;
+}
+
+PageStealer::PROCESS_MINIMAL_INFO PageStealer::GetPMIByProcessName(std::string ProcessName)
+{
+	PROCESS_MINIMAL_INFO retPMI = { 0 };
+
+	memcpy_s(retPMI.ImageFileName, min(14, strlen(ProcessName.c_str())), 
+		ProcessName.c_str(), min(14, strlen(ProcessName.c_str())));
+	std::wstring wProcessName(ProcessName.begin(), ProcessName.end());
+	retPMI.PID = GetPIDByName(wProcessName);
+	if (retPMI.PID != -1)
+	{
+		return retPMI;
+	}
+
+	debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET PMI\n", __func__);
+	return { 0 };
 }
