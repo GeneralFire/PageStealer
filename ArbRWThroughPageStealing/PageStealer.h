@@ -24,6 +24,6 @@ public:
 
 private:
 	
-	static std::set<ULONG_PTR> GetEprocessCandidatesByPID(DWORD PID);
+	static UINT64 GetEprocessCandidatesByPID(DWORD PID);
 	static PVOID GetDirectoryTableFromKPROCESS(PVOID KPROCESS);
 };

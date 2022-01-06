@@ -11,22 +11,10 @@ VOID* PageStealer::GetProceessPageTableL4(DWORD PID)
 	printf("%s FIX ME\n", __func__);
 	return (VOID*)NULL;
 
-	UINT64 EPROCESSAddr = 0;
-	std::set<ULONG_PTR> EprocessCandidates = GetEprocessCandidatesByPID(PID);
-
-	if (EprocessCandidates.size() >= 1)
-	{
-		printf("Eprocess candidates >= 1. Just pick first(aka *begin())\n");
-		EPROCESSAddr = *EprocessCandidates.begin();
-	}
-	if (EprocessCandidates.size() == 0)
-	{
-		printf("Eprcess candidates = 0. Exit.");
-		return (VOID*)0;
-	}
+	UINT64 EPROCESSAddr = (UINT64)GetKPROCESSByPID(PID);
 	
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
-	UINT64 DirBaseOffset = coreDbg.getFieldOffset((char*)"_KPROCESS", (char*)"DirectoryTableBase");
+	UINT64 DirBaseOffset = coreDbg.getFieldOffset((wchar_t*)L"_KPROCESS", (wchar_t*)L"DirectoryTableBase");
 
 	DriverControl& dc = DriverControl::GetInstance();
 	UINT64 DirBaseAddress = {0};
@@ -71,11 +59,11 @@ DWORD PageStealer::GetPIDByName(std::wstring ProcessName)
     return -1;
 }
 
-std::set<ULONG_PTR> PageStealer::GetEprocessCandidatesByPID(DWORD PID)
+UINT64 PageStealer::GetEprocessCandidatesByPID(DWORD PID)
 {
 	DWORD cPID = PID;
 	ULONG uLength = 0;
-	std::set<ULONG_PTR> out = {};
+	// std::set<ULONG_PTR> out = {};
 
 	const ULONG SystemExtendedHandleInformation = 0x40;
 	// This particular SYSTEM_INFORMATION_CLASS doesn't accurately return the correct number of bytes required
@@ -93,14 +81,14 @@ std::set<ULONG_PTR> PageStealer::GetEprocessCandidatesByPID(DWORD PID)
 
 	if (!uLength) {
 
-		return {};
+		return 0;
 	}
 	uLength += 50 * (sizeof(SYSTEM_HANDLE_INFORMATION_EX) + sizeof(SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX));
 	PVOID lpBuffer = VirtualAlloc(nullptr, uLength, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	if (!lpBuffer) {
 
-		return {};
+		return 0;
 	}
 
 	RtlSecureZeroMemory(lpBuffer, uLength);
@@ -115,40 +103,45 @@ std::set<ULONG_PTR> PageStealer::GetEprocessCandidatesByPID(DWORD PID)
 
 	if (!NT_SUCCESS(status)) {
 
-		return {};
+		return 0;
 	}
 
 	SYSTEM_HANDLE_INFORMATION_EX* lpHandleInformation = reinterpret_cast<SYSTEM_HANDLE_INFORMATION_EX*>(lpBuffer);
 
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
-	UINT64 PIDOffset = coreDbg.getFieldOffset((char*)"_EPROCESS", (char*)"UniqueProcessId");
-	UINT64 ImageFileNameOffset = coreDbg.getFieldOffset((char*)"_EPROCESS", (char*)"ImageFileName");
+	UINT64 PIDOffset = coreDbg.getFieldOffset((wchar_t*)L"_EPROCESS", (wchar_t*)L"UniqueProcessId");
+	UINT64 ImageFileNameOffset = coreDbg.getFieldOffset((wchar_t*)L"_EPROCESS", (wchar_t*)L"ImageFileName");
 
 	if (PIDOffset == -1 || ImageFileNameOffset == -1)
 	{
-		return {};
+		return 0;
 	}
 
+	UINT64 ret = 0;
 	for (UINT i = 0; i < lpHandleInformation->NumberOfHandles; i++)
 	{
 		if (lpHandleInformation->Handles[i].UniqueProcessId == (DWORD)4)
 		{
-
 			UINT64 buffer = 0;
-			char imageFileNameBuffer[15] = { 0 };
-
 			DriverControl& dc = DriverControl::GetInstance();
 			if (dc.ReadKernelVA(((UINT64)(lpHandleInformation->Handles[i].Object) + PIDOffset), 8, (UINT8*)&buffer) && buffer == PID)
 			{
-				out.insert((ULONG_PTR)lpHandleInformation->Handles[i].Object);
+				ret = (UINT64) lpHandleInformation->Handles[i].Object;
 			}
 		}
 	}
 	VirtualFree(lpBuffer, 0, MEM_RELEASE);
-	return out;
+	return ret;
 
 }
 
+/// <summary>
+/// SIMPLE VTOP. Doesn't check is table entry present. 
+/// </summary>
+/// <param name="va_">Virtual address to be transated</param>
+/// <param name="KPROCESS">KPROCESS/EPROCESS ptr of target process</param>
+/// <param name="VATableEntriesRetRequest">PTR to PVirtualAddressTableEntries struct to get table entries, NULL if just VTOP physical address</param>
+/// <returns>0 if failed, otherwise nonzero value</returns>
 VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries VATableEntriesRetRequest)
 {
 	DriverControl& dc = DriverControl::GetInstance();
@@ -159,7 +152,7 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 	PAGE_ENTRY<PDE> pd_entry;
 	PAGE_ENTRY<PTE> pt_entry;
 
-	debug::printf_d(debug::LogLevel::LOG, "translating 0x%llx\n", va.value);
+	debug::printf_d(debug::LogLevel::LOG, "%s translating 0x%llx\n", __func__, va.value);
 
 	UINT64 DirTable = (UINT64) GetDirectoryTableFromKPROCESS((PVOID)KPROCESS);
 	debug::printf_d(debug::LogLevel::LOG, "DirectoryTable 0x%llx\n", DirTable);
@@ -188,7 +181,7 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 				if (dc.ReadOverMapViewOfSection((UINT64)pt_entry.pointer,
 					sizeof(PTE), (UINT8*)&pt_entry.value))
 				{
-					debug::printf_d(debug::LogLevel::LOG, "%llx\n", (pt_entry.value.pfn << PAGE_SHIFT) + va.offset);
+					debug::printf_d(debug::LogLevel::LOG, "VTOP RES (%llx): %llx\n", va.value, (pt_entry.value.pfn << PAGE_SHIFT) + va.offset);
 					
 					if (VATableEntriesRetRequest != NULL)
 					{
@@ -210,22 +203,23 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 
 PVOID PageStealer::GetKPROCESSByPID(DWORD PID)
 {
-	std::set<ULONG_PTR> EprocessCandidates = GetEprocessCandidatesByPID(PID);
-	if (EprocessCandidates.size() >= 1)
+	UINT64 EPROCESS = GetEprocessCandidatesByPID(PID);
+	if (EPROCESS == 0)
 	{
-		debug::printf_d(debug::LogLevel::LOG, "%s Eprocess candidates >= 1. Just pick first(aka *begin())\n", __func__);
-		PVOID ret = (PVOID)(*EprocessCandidates.begin());
-		return ret;
+		throw std::invalid_argument("CANNOT FIND EPROCESS");
+		// debug::printf_d(debug::LogLevel::LOG, "%s Eprocess candidates >= 1. Just pick first(aka *begin())\n", __func__);
+		// PVOID ret = (PVOID) EPROCESS;
+		// return ret;
 	}
 
-	return 0;
+	return (PVOID) EPROCESS;
 }
 
 PVOID PageStealer::GetDirectoryTableFromKPROCESS(PVOID KPROCESS_)
 {
 	UINT64 KPROCESS = (UINT64)KPROCESS_;
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
-	UINT64 DirBaseOffset = coreDbg.getFieldOffset((char*)"_KPROCESS", (char*)"DirectoryTableBase");
+	UINT64 DirBaseOffset = coreDbg.getFieldOffset((wchar_t*)L"_KPROCESS", (wchar_t*)L"DirectoryTableBase");
 
 	DriverControl& dc = DriverControl::GetInstance();
 	UINT64 DirBaseAddress = { 0 };
@@ -376,7 +370,7 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(DWORD SourcePID, DWORD DestPID,
 
 	if (va_ && 0xFFF)
 	{
-		debug::printf_d(debug::LogLevel::LOG, "%s UNALIGNED VA. MAP WHOLE PAGE\n", __func__);
+		debug::printf_d(debug::LogLevel::WARN, "%s UNALIGNED VA. MAPPING WHOLE PAGE\n", __func__);
 		va_ = (va_ >> 12) << 12;
 	}
 

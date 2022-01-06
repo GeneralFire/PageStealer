@@ -146,7 +146,7 @@ bool DiaHelpWrapper::getSymbolType(IDiaSymbol* symbol, IDiaSymbol** symbolType) 
 		return false;
 }
 
-bool DiaHelpWrapper::getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fieldName, LONG* symbolOffset) {
+bool DiaHelpWrapper::getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fieldName, UINT64* symbolOffset) {
 	
 	CComPtr<IDiaEnumSymbols> enu;
 	if (!gDiaRoot->findChildren(SymTagNull,
@@ -168,7 +168,7 @@ bool DiaHelpWrapper::getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fie
 				status = getSymbolByName(EnuInner, fieldName, &SymInner);
 
 				if (status) {
-					if (SUCCEEDED(SymInner->get_offset(symbolOffset)))
+					if (SUCCEEDED(SymInner->get_offset((LONG*)symbolOffset)))
 						return true;
 					else
 						printf("getSymbolOffsetInKernelType cant get_offset");

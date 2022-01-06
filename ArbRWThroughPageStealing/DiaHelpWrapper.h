@@ -9,9 +9,9 @@
 
 class DiaHelpWrapper {
 private:
-	CComPtr<IDiaDataSource> gpDiaSource;
-	CComPtr<IDiaSession> gpDiaSession;
-	CComPtr<IDiaSymbol> gDiaRoot;
+	IDiaDataSource* gpDiaSource;
+	IDiaSession* gpDiaSession;
+	IDiaSymbol* gDiaRoot;
 
 public:
 	BOOL    IsInitialized = FALSE;
@@ -33,7 +33,7 @@ public:
 	bool getSymbolOffset(IDiaSymbol* symbol, LONG* symbolOffset);
 	bool getSymbolType(IDiaSymbol* symbol, IDiaSymbol** symbolType);
 
-	bool getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fieldName, LONG* symbolOffset);
+	bool getSymbolOffsetInKernelType(wchar_t* typeName, wchar_t* fieldName, UINT64* symbolOffset);
 
 
 };

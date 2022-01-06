@@ -5,6 +5,7 @@ void debug::printf_d(LogLevel level, const char* format, ...)
 
     if ((unsigned int)level >= DEBUG_LOG_LEVEL)
     {
+        printf("[%s] ", debug::LogLevelString[(unsigned int) level]);
         char buffer[256];
         va_list args;
         va_start(args, format);
@@ -19,3 +20,11 @@ void debug::printf_d(LogLevel level, const char* format, ...)
 
     }
 }
+
+const char* debug::LogLevelString[] =
+{
+    "WARN",
+    "LOG",
+    "ERR",
+    "FATAL"
+};

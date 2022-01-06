@@ -88,21 +88,28 @@ char* CoreDBG::getPdb() {
 #endif
 }
 
-ULONG64 CoreDBG::getFieldOffset(char* typeName_, char* fieldName_) {
+ULONG64 CoreDBG::getFieldOffset(wchar_t* typeName_, wchar_t* fieldName_) {
 
-	wchar_t* typeName = new wchar_t[strlen(typeName_) + 1];
-	mbstowcs_s(NULL, typeName, strlen(typeName_) + 1, typeName_, strlen(typeName_));
-
-	wchar_t* fieldName = new wchar_t[strlen(fieldName_) + 1];
-	mbstowcs_s(NULL, fieldName, strlen(fieldName_) + 1, fieldName_, strlen(fieldName_));
-
-	LONG offset = 0;
-	if (!DiaPdb.getSymbolOffsetInKernelType(typeName, fieldName, &offset))
+	UINT64 offset = 0;
+	try
 	{
+		offset = OffsetsDict.at(typeName_).at(fieldName_);
+		debug::printf_d(debug::LogLevel::LOG, "%s Using existing keys for (%S, %S)\n", __func__, typeName_, fieldName_);
+		return offset;
+	}
+	catch (const std::out_of_range)
+	{
+		debug::printf_d(debug::LogLevel::LOG, "%s First getFieldOffset for (%S, %S). Let's try to find it\n", __func__, typeName_, fieldName_);
+	}
+
+	
+	if (!DiaPdb.getSymbolOffsetInKernelType(typeName_, fieldName_, &offset))
+	{
+		debug::printf_d(debug::LogLevel::ERR, "%s cannot get offsets for (%S, %S)\n", __func__, typeName_, fieldName_);
 		offset = -1;
 	}
-	delete typeName;
-	delete fieldName;
+
+	OffsetsDict[typeName_][fieldName_] = offset;
 	return offset;
 }
 

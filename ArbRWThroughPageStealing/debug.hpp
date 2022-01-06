@@ -8,6 +8,8 @@
 
 class debug
 {
+	static const char* LogLevelString[];
+
 public:
 
 	enum class LogLevel

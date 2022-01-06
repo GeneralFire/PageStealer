@@ -27,7 +27,7 @@ int main()
     // PVOID va =  PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace((UINT64) PageStealer::GetKPROCESSByPID(PID), 0x13000, 3);
     PageStealer::MapVirtualPageToAnotherProcess(SourcePID,
         DestPID,
-        0x7FF675BB4000,
+        0x7FF7AA6B4030,
         TRUE);
 
     return 0;
