@@ -23,8 +23,9 @@ void debug::printf_d(LogLevel level, const char* format, ...)
 
 const char* debug::LogLevelString[] =
 {
-    "LOG",
+    "LOGG",
+    "VRBS"
     "WARN",
-    "ERR",
-    "FATAL"
+    "ERRR",
+    "FATL"
 };

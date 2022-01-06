@@ -1,6 +1,6 @@
 #include "VadExplorer.h"
 
-VOID VADEXPLORER::ListVAD(UINT64 PParentVAD_, LONG level)
+VOID VadExplorer::ListVAD(UINT64 PParentVAD_, LONG level)
 {
     PMMVAD_SHORT pVadLeft = NULL;
     PMMVAD_SHORT pVadRight = NULL;
@@ -29,7 +29,7 @@ VOID VADEXPLORER::ListVAD(UINT64 PParentVAD_, LONG level)
     return;
 }
 
-UINT64 VADEXPLORER::GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
+UINT64 VadExplorer::GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
 {
     UINT64 res = _GetTargetVADByRootVadAndVA(RootVad, VA);
     if (res == 0)
@@ -39,14 +39,14 @@ UINT64 VADEXPLORER::GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
     return res;
 }
 
-UINT64 VADEXPLORER::_GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
+UINT64 VadExplorer::_GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
 {
     UINT64 TargetStartingVpn = VA >> 12;
 
     MMVAD_SHORT ParentVADValue = { 0 };
     SetMMVadByPtr((PMMVAD_SHORT)RootVad, &ParentVADValue);
 
-    if (ParentVADValue.StartingVpn == TargetStartingVpn)
+    if ((ParentVADValue.StartingVpn | ((UINT64)ParentVADValue.StartingVpnHigh << 32)) == TargetStartingVpn)
     {
         return RootVad;
     }
@@ -74,7 +74,7 @@ UINT64 VADEXPLORER::_GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA)
     return 0;
 }
 
-UINT64 VADEXPLORER::GetVadRootByEPROCESS(UINT64 EPROCESS)
+UINT64 VadExplorer::GetVadRootByEPROCESS(UINT64 EPROCESS)
 {
 	CoreDBG& coreDBG = CoreDBG::GetInstance();
 	UINT64 offset = coreDBG.getFieldOffset((wchar_t*) L"_EPROCESS", (wchar_t*) L"VadRoot");
@@ -96,7 +96,7 @@ UINT64 VADEXPLORER::GetVadRootByEPROCESS(UINT64 EPROCESS)
 /// <param name="VadPtrInKernelSpace">PtrToVad in kernel space</param>
 /// <param name="pVadValue">PtrToVadValue in userspace</param>
 /// <returns>true if success, otherwise false</returns>
-bool VADEXPLORER::SetMMVadByPtr(PMMVAD_SHORT VadPtrInKernelSpace, PMMVAD_SHORT pVadValue)
+bool VadExplorer::SetMMVadByPtr(PMMVAD_SHORT VadPtrInKernelSpace, PMMVAD_SHORT pVadValue)
 {
     DriverControl& dc = DriverControl::GetInstance();
 
@@ -108,16 +108,53 @@ bool VADEXPLORER::SetMMVadByPtr(PMMVAD_SHORT VadPtrInKernelSpace, PMMVAD_SHORT p
     return false;
 }
 
-VOID VADEXPLORER::DisplayVadInfo(PMMVAD_SHORT pVad)
+VOID VadExplorer::DisplayVadInfo(PMMVAD_SHORT pVad)
 {
     debug::printf_d(debug::LogLevel::LOG, 
         "\t[+]Starting VPN 0x%llx\n   \tEnding VPN   0x%llx\n\tProtection", 
         pVad->StartingVpn,
-        pVad->EndingVpn);
+        pVad->EndingVpn,
+        pVad->u.VadFlags.Protection
+    );
     
     // debug::printf_d(debug::LogLevel::LOG, "   Ending VPN   0x%llx", pVad->EndingVpn);
     // debug::printf_d(debug::LogLevel::LOG, "      Control Area : 0x%x", pVadInfo->pControlArea);
     // debug::printf_d(debug::LogLevel::LOG, "      File Object : 0x%x", pVadInfo->pFileObject);
     // debug::printf_d(debug::LogLevel::LOG, "      Name : %wZ", pVadInfo->Name);
     return;
+}
+
+
+std::vector<VadExplorer::PUBLIC_VADINFO> VadExplorer::GetVadInfoVectorByRootVad(UINT64 RootVad)
+{
+    MMVAD_SHORT ParentVADValue = { 0 };
+    std::vector<VadExplorer::PUBLIC_VADINFO> out = {};
+    SetMMVadByPtr((PMMVAD_SHORT)RootVad, &ParentVADValue);
+
+    PUBLIC_VADINFO instance = { 0 };
+    instance.EndingVpn = ParentVADValue.EndingVpn | ((UINT64)ParentVADValue.EndingVpnHigh << 32);
+    instance.PtrInKernelSpace = RootVad;
+    instance.StartingVpn = ParentVADValue.StartingVpn | ((UINT64)ParentVADValue.StartingVpnHigh << 32);
+    out.push_back(instance);
+
+    PMMVAD_SHORT pVadLeft = NULL;
+    PMMVAD_SHORT pVadRight = NULL;
+
+    pVadLeft = (PMMVAD_SHORT)ParentVADValue.VadNode.Left;
+    pVadRight = (PMMVAD_SHORT)ParentVADValue.VadNode.Right;
+
+    std::vector<VadExplorer::PUBLIC_VADINFO> LeftRet = {};
+    std::vector<VadExplorer::PUBLIC_VADINFO> RightRet = {};
+    if (pVadLeft != 0x0)
+    {
+        LeftRet = GetVadInfoVectorByRootVad((UINT64)pVadLeft);
+        out.insert(out.end(), LeftRet.begin(), LeftRet.end());
+    }
+    if (pVadRight != 0x0)
+    {
+        RightRet = GetVadInfoVectorByRootVad((UINT64)pVadRight);
+        out.insert(out.end(), RightRet.begin(), RightRet.end());
+    }
+
+    return out;
 }

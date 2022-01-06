@@ -3,8 +3,21 @@
 #include "CoreDBG.h"
 #include "driver_control.hpp"
 
-class VADEXPLORER
+#define MM_ZERO_ACCESS         0  // this value is not used. 
+#define MM_READONLY            1 
+#define MM_EXECUTE             2 
+#define MM_EXECUTE_READ        3 
+#define MM_READWRITE           4  // bit 2 is set if this is writable. 
+#define MM_WRITECOPY           5 
+#define MM_EXECUTE_READWRITE   6 
+#define MM_EXECUTE_WRITECOPY   7 
+#define MM_NOCACHE             8 
+#define MM_DECOMMIT         0x10 
+#define MM_NOACCESS         MM_DECOMMIT|MM_NOCACHE
+
+class VadExplorer
 {
+
 private:
 
     typedef struct _MMVAD_FLAGS
@@ -121,7 +134,16 @@ private:
     static UINT64 _GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA);
 public:
 
+    typedef struct _PUBLIC_VADINFO
+    {
+        UINT64 PtrInKernelSpace;
+        UINT64 StartingVpn;
+        UINT64 EndingVpn;
+
+    } PUBLIC_VADINFO, PPUBLIC_VADINFO;
+
     static UINT64 GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA);
 	static VOID ListVAD(UINT64 PParentVAD, LONG level);
     static UINT64 GetVadRootByEPROCESS(UINT64 EPROCESS);
+    static std::vector<PUBLIC_VADINFO> GetVadInfoVectorByRootVad(UINT64 RootVad);
 };

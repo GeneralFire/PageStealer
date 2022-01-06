@@ -7,8 +7,6 @@
 
 int main()
 {
-
-    printf("!");
     PVOID sampleAlloc = VirtualAllocEx(OpenProcess(PROCESS_VM_OPERATION, TRUE, GetCurrentProcessId()),
         0, PAGE_SIZE, MEM_COMMIT, PAGE_READONLY);
 
@@ -17,29 +15,32 @@ int main()
     PageStealer::PROCESS_MINIMAL_INFO DestPMI = PageStealer::GetPMIByProcessName("ArbRWThroughPageStealing.exe");
     PageStealer::PROCESS_MINIMAL_INFO SourcePMI = PageStealer::GetPMIByProcessName("mspaint.exe");
 
-    // PPML4T pPml4T = static_cast<PPML4T>(PageStealer::GetProceessPageTableL4(PID1));
+    UINT64 DestKPROCESS = PageStealer::GetKPROCESSByPMI(&DestPMI);
+    UINT64 SourceKPROCESS = PageStealer::GetKPROCESSByPMI(&SourcePMI);
 
-    PVOID pa = PageStealer::VTOP((UINT64)&sampleUINT64, (UINT64) PageStealer::GetKPROCESSByPMI(&DestPMI), NULL);
+    PVOID pa = PageStealer::VTOP((UINT64)&sampleUINT64, 
+        DestKPROCESS, 
+        NULL);
 
-    UINT64 RootVADPtr = VADEXPLORER::GetVadRootByEPROCESS(PageStealer::GetKPROCESSByPMI(&SourcePMI));
-    VADEXPLORER::ListVAD(RootVADPtr, 0);
-    UINT64 VAD = VADEXPLORER::GetTargetVADByRootVadAndVA(RootVADPtr, 0x7FF662654000);
-    // PVOID va =  PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace((UINT64) PageStealer::GetKPROCESSByPID(PID), 0x13000, 3);
+    UINT64 SourceRootVADPtr = VadExplorer::GetVadRootByEPROCESS(SourceKPROCESS);
+    UINT64 DestRootVADPtr = VadExplorer::GetVadRootByEPROCESS(DestKPROCESS);
+
+    UINT64 VAD = VadExplorer::GetTargetVADByRootVadAndVA(DestRootVADPtr, (UINT64) sampleAlloc);
+
+    PageStealer::StealEntireVirtualAddressSpace(
+        &SourcePMI,
+        &DestPMI,
+        true);
+
     PageStealer::MapVirtualPageToAnotherProcess(&SourcePMI,
         &DestPMI,
-        0x7FF7C06A4010,
+        0x29255be0000,
         TRUE);
 
-    //PageStealer::MapVirtualPageToAnotherProcess(SourcePID,
-    //    DestPID,
-    //    0x7FF7C06A5000,
-    //    TRUE);
 
-    //PageStealer::MapVirtualPageToAnotherProcess(SourcePID,
-    //    DestPID,
-    //    0x7FF7C06A6000,
-    //    TRUE);
+    pa = PageStealer::VTOP(0x7FF7C06A4000, DestKPROCESS, NULL);
 
-    pa = PageStealer::VTOP(0x7FF7C06A4000, (UINT64)PageStealer::GetKPROCESSByPMI(&DestPMI), NULL);
+    
+    
     return 0;
 }

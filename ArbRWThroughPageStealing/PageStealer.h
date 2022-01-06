@@ -9,6 +9,7 @@
 #include "VirtualsHeader.h"
 #include <set>
 #include "debug.hpp"
+#include "VadExplorer.h"
 
 class PageStealer
 {
@@ -27,10 +28,10 @@ public:
 	static PVOID VTOP(UINT64 va, UINT64 KPROCESS, PVirtualAddressTableEntries ret);
 	static PVOID MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount);
 	static BOOL MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 VA, BOOL MakePageWritable);
-	static BOOL StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 VA);
+	static BOOL StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, BOOL DropHighUserMemory);
 
 private:
-	
+	static std::map<DWORD, UINT64> EprocessDictionary;
 	
 	static DWORD GetPIDByName(std::wstring ProcessName);
 	static UINT64 _GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);

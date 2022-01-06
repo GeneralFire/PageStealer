@@ -1,5 +1,6 @@
 #include "PageStealer.h"
 
+std::map<DWORD, UINT64> PageStealer::EprocessDictionary;
 /// <summary>
 /// RETURNS DirectoryTable content
 /// </summary>
@@ -219,12 +220,24 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 
 UINT64 PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 {
-	UINT64 EPROCESS = _GetKPROCESSByPMI(PMI);
+	UINT64 EPROCESS = 0;
+	try
+	{
+		EPROCESS = EprocessDictionary.at(PMI->PID);
+		debug::printf_d(debug::LogLevel::LOG, "%s Using existing keys for (%s, %lx)\n", __func__, PMI->ImageFileName, PMI->PID);
+		return EPROCESS;
+	}
+	catch (const std::out_of_range)
+	{
+		debug::printf_d(debug::LogLevel::LOG, "%s First for (%s, %lx). Let's try to find it\n", __func__, PMI->ImageFileName, PMI->PID);
+	}
+	EPROCESS = _GetKPROCESSByPMI(PMI);
 	if (EPROCESS == 0)
 	{
 		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT FIND EPROCESS", __func__);
 	}
-
+	EprocessDictionary[PMI->PID] = EPROCESS;
+	debug::printf_d(debug::LogLevel::LOG, "%s KPROCESS for %s 0x%llx\n", __func__, PMI->ImageFileName, EPROCESS);
 	return EPROCESS;
 }
 
@@ -358,7 +371,7 @@ PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPRO
 	//		}
 	//	}
 	//}
-	debug::printf_d(debug::LogLevel::ERR, "%s FIX ME", __func__);
+	debug::printf_d(debug::LogLevel::FATAL, "%s FIX ME", __func__);
 	return NULL;
 }
 
@@ -401,19 +414,19 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 		& SourceTableEntries.pdp_entry.value.present
 		& SourceTableEntries.pml4_entry.value.present))
 	{
-		debug::printf_d(debug::LogLevel::ERR, "%s TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE\n", __func__);
+		debug::printf_d(debug::LogLevel::ERR, "%s TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE (0x%llx)\n", __func__, va.value);
 		return FALSE;
 	}
 
 	// get table entries from dest 
 	VirtualAddressTableEntries OriginalDestTableEntries = { 0 };
-	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(SourcePMI), &OriginalDestTableEntries);
+	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(DestPMI), &OriginalDestTableEntries);
 	if ((OriginalDestTableEntries.pt_entry.value.present
 		& OriginalDestTableEntries.pd_entry.value.present
 		& OriginalDestTableEntries.pdp_entry.value.present
 		& OriginalDestTableEntries.pml4_entry.value.present))
 	{
-		debug::printf_d(debug::LogLevel::WARN, "%s TARGET VIRTUAL ADDRESS ALREADY EXIST IN DEST\n", __func__);
+		debug::printf_d(debug::LogLevel::WARN, "%s TARGET VIRTUAL ADDRESS ALREADY EXIST IN DEST (0x%llx)\n", __func__, va.value);
 		return FALSE;
 	}
 
@@ -441,7 +454,10 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 		debug::printf_d(debug::LogLevel::WARN, "LET'S JUST EDIT PAGE TABLE\n");
 		// return FALSE;
 	}
-
+	if (VirtualAllocRes == (PVOID)va.value)
+	{
+		debug::printf_d(debug::LogLevel::VERBOSE, "%s SUCCESSFULLY ALLOCATED THE SAME VA (0x%llx)\n", __func__, VirtualAllocRes);
+	}
 	if (VirtualAllocRes != (PVOID)va.value && VirtualAllocRes != NULL)
 	{
 		debug::printf_d(debug::LogLevel::WARN, "%s ALLOCATED PAGE DOESN'T MATCH SPECIFIED VIRTUAL ADDRESS\n", __func__);
@@ -495,8 +511,33 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 	return FALSE;
 }
 
-BOOL PageStealer::StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 va_)
+BOOL PageStealer::StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, BOOL DropHighUserMemory)
 {
+	UINT64 DestKPROCESS = PageStealer::GetKPROCESSByPMI(DestPMI);
+	UINT64 SourceKPROCESS = PageStealer::GetKPROCESSByPMI(SourcePMI);
+
+	UINT64 SourceRootVADPtr = VadExplorer::GetVadRootByEPROCESS(SourceKPROCESS);
+	UINT64 DestRootVADPtr = VadExplorer::GetVadRootByEPROCESS(DestKPROCESS);
+
+	std::vector<VadExplorer::PUBLIC_VADINFO> DestVadInfoVec = VadExplorer::GetVadInfoVectorByRootVad(SourceRootVADPtr);
+
+	for (VadExplorer::PUBLIC_VADINFO& a : DestVadInfoVec)
+	{
+		if (DropHighUserMemory && ((a.StartingVpn >> 32) == 0))
+		{
+			PageStealer::MapVirtualPageToAnotherProcess(SourcePMI,
+				DestPMI,
+				a.StartingVpn << 12,
+				TRUE);
+		}
+		else
+		{
+			PageStealer::MapVirtualPageToAnotherProcess(SourcePMI,
+				DestPMI,
+				a.StartingVpn << 12,
+				TRUE);
+		}
+	}
 
 	return FALSE;
 }
