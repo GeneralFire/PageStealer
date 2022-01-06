@@ -21,7 +21,7 @@ public:
 
 	static PROCESS_MINIMAL_INFO GetPMIByProcessName(std::string ProcessName);
 	
-	static PVOID GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
+	static UINT64 GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
 	static PVOID GetProceessPageTableL4(PPROCESS_MINIMAL_INFO PMI);
 	
 	static PVOID VTOP(UINT64 va, UINT64 KPROCESS, PVirtualAddressTableEntries ret);
@@ -34,5 +34,5 @@ private:
 	
 	static DWORD GetPIDByName(std::wstring ProcessName);
 	static UINT64 _GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
-	static PVOID GetDirectoryTableFromKPROCESS(PVOID KPROCESS);
+	static UINT64 GetDirectoryTableFromKPROCESS(UINT64 KPROCESS);
 };

@@ -168,6 +168,7 @@
     <ClCompile Include="PE.cpp" />
     <ClCompile Include="ResourceLoader.cpp" />
     <ClCompile Include="sys.cpp" />
+    <ClCompile Include="VadExplorer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asrdrv.hpp" />
@@ -184,6 +185,7 @@
     <ClInclude Include="ResourceLoader.h" />
     <ClInclude Include="resource_array.hpp" />
     <ClInclude Include="sys.hpp" />
+    <ClInclude Include="VadExplorer.h" />
     <ClInclude Include="VirtualsHeader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

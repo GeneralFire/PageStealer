@@ -170,7 +170,7 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 
 	debug::printf_d(debug::LogLevel::LOG, "%s translating 0x%llx\n", __func__, va.value);
 
-	UINT64 DirTable = (UINT64) GetDirectoryTableFromKPROCESS((PVOID)KPROCESS);
+	UINT64 DirTable = (UINT64) GetDirectoryTableFromKPROCESS(KPROCESS);
 	debug::printf_d(debug::LogLevel::LOG, "DirectoryTable 0x%llx\n", DirTable);
 
 	pml4_entry.pointer = (PPML4E)DirTable + va.pml4_index;
@@ -217,7 +217,7 @@ VOID* PageStealer::VTOP(UINT64 va_, UINT64 KPROCESS, PVirtualAddressTableEntries
 	return (VOID*) -1;
 }
 
-PVOID PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
+UINT64 PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 {
 	UINT64 EPROCESS = _GetKPROCESSByPMI(PMI);
 	if (EPROCESS == 0)
@@ -225,10 +225,10 @@ PVOID PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT FIND EPROCESS", __func__);
 	}
 
-	return (PVOID) EPROCESS;
+	return EPROCESS;
 }
 
-PVOID PageStealer::GetDirectoryTableFromKPROCESS(PVOID KPROCESS_)
+UINT64 PageStealer::GetDirectoryTableFromKPROCESS(UINT64 KPROCESS_)
 {
 	UINT64 KPROCESS = (UINT64)KPROCESS_;
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
@@ -239,17 +239,17 @@ PVOID PageStealer::GetDirectoryTableFromKPROCESS(PVOID KPROCESS_)
 
 	if (dc.ReadKernelVA(KPROCESS + DirBaseOffset, 8, (UINT8*)&DirBaseAddress))
 	{
-		return (PVOID)DirBaseAddress;
+		return DirBaseAddress;
 	}
 	else
 	{
-		return NULL;
+		return 0;
 	}
 }
 
 PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount)
 {
-	PVOID DirectoryTable = GetDirectoryTableFromKPROCESS((PVOID)KPROCESS);
+	UINT64 DirectoryTable = GetDirectoryTableFromKPROCESS(KPROCESS);
 
 	if ((PA & 0xFFF) != 0)
 	{

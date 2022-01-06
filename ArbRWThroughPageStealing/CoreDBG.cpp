@@ -105,7 +105,7 @@ ULONG64 CoreDBG::getFieldOffset(wchar_t* typeName_, wchar_t* fieldName_) {
 	
 	if (!DiaPdb.getSymbolOffsetInKernelType(typeName_, fieldName_, &offset))
 	{
-		debug::printf_d(debug::LogLevel::ERR, "%s cannot get offsets for (%S, %S)\n", __func__, typeName_, fieldName_);
+		debug::printf_d(debug::LogLevel::FATAL, "%s cannot get offsets for (%S, %S)\n", __func__, typeName_, fieldName_);
 		offset = -1;
 	}
 
