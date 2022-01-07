@@ -1,5 +1,9 @@
 #include "VadExplorer.h"
 
+UINT8 VadExplorer::OriginalBytes[] = { 0xFC, 0x06, 0x00, 0x00 };
+UINT8 VadExplorer::OriginalBytesRes[] = { 0x33, 0xDB, 0x8B, 0xC3 };
+UINT8 VadExplorer::StoreRes[] = { 0x48, 0x89, 0x47, 0x10 };
+
 VOID VadExplorer::ListVAD(UINT64 PParentVAD_, LONG level)
 {
     PMMVAD_SHORT pVadLeft = NULL;
@@ -157,4 +161,234 @@ std::vector<VadExplorer::PUBLIC_VADINFO> VadExplorer::GetVadInfoVectorByRootVad(
     }
 
     return out;
+}
+
+BOOL VadExplorer::HookDispatchRoutineAndInsertMiAllocateVad()
+{
+    DriverControl& dc = DriverControl::GetInstance();
+    CoreDBG& coreDbg = CoreDBG::GetInstance();
+
+
+    UINT64 IntelDrvBase = coreDbg.GetModuleBase((char*)"IntelDrvX64.sys");
+
+    UINT64 MiAllocateVadFcnPtr = coreDbg.GetKernelBase() +
+        coreDbg.getKernelSymbolAddress((char*)"MiAllocateVad");
+
+    UINT64 PtrToFuntionToRewrite = IntelDrvBase + ARG3FCN_REFWIRTE;
+
+    
+
+    UINT32 dAddress = MiAllocateVadFcnPtr - PtrToFuntionToRewrite - 5;
+
+    UINT64 PhysicalMemoryOfFunctionToRewrite = dc.Virt2Phys(PtrToFuntionToRewrite);
+    
+    BOOL bRes = dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 1,
+        sizeof(dAddress),
+        (UINT8*) &dAddress);
+
+    bRes &= dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 5,
+        sizeof(StoreRes),
+        (UINT8*)&StoreRes);
+
+    return bRes;
+}
+
+BOOL VadExplorer::HookDispatchRoutineAndInsertMiInsertVad()
+{
+    DriverControl& dc = DriverControl::GetInstance();
+    CoreDBG& coreDbg = CoreDBG::GetInstance();
+
+
+    UINT64 IntelDrvBase = coreDbg.GetModuleBase((char*)"IntelDrvX64.sys");
+
+    UINT64 MiAllocateVadFcnPtr = coreDbg.GetKernelBase() +
+        coreDbg.getKernelSymbolAddress((char*)"MiInsertVad");
+
+    UINT64 PtrToFuntionToRewrite = IntelDrvBase + ARG3FCN_REFWIRTE;
+
+
+
+    UINT32 dAddress = MiAllocateVadFcnPtr - PtrToFuntionToRewrite - 5;
+
+    UINT64 PhysicalMemoryOfFunctionToRewrite = dc.Virt2Phys(PtrToFuntionToRewrite);
+
+    
+
+    BOOL bRes = dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 1,
+        sizeof(dAddress),
+        (UINT8*)&dAddress);
+
+    bRes &= dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 5,
+        sizeof(StoreRes),
+        (UINT8*)&StoreRes);
+
+    return bRes;
+
+}
+
+BOOL VadExplorer::HookDispatchRoutineAndInsertMiInsertVadCharges()
+{
+    DriverControl& dc = DriverControl::GetInstance();
+    CoreDBG& coreDbg = CoreDBG::GetInstance();
+
+
+    UINT64 IntelDrvBase = coreDbg.GetModuleBase((char*)"IntelDrvX64.sys");
+
+    UINT64 MiAllocateVadFcnPtr = coreDbg.GetKernelBase() +
+        coreDbg.getKernelSymbolAddress((char*)"MiInsertVadCharges");
+
+    if (MiAllocateVadFcnPtr == coreDbg.GetKernelBase())
+    {
+        debug::printf_d(debug::LogLevel::FATAL, "CANNOT HOOK\n");
+    }
+    UINT64 PtrToFuntionToRewrite = IntelDrvBase + ARG3FCN_REFWIRTE;
+
+
+
+    UINT32 dAddress = MiAllocateVadFcnPtr - PtrToFuntionToRewrite - 5;
+
+    UINT64 PhysicalMemoryOfFunctionToRewrite = dc.Virt2Phys(PtrToFuntionToRewrite);
+
+
+
+    BOOL bRes = dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 1,
+        sizeof(dAddress),
+        (UINT8*)&dAddress);
+
+    bRes &= dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 5,
+        sizeof(StoreRes),
+        (UINT8*)&StoreRes);
+
+    return bRes;
+
+}
+BOOL VadExplorer::HookDispatchRoutineRestoreOriginalBytes()
+{
+    DriverControl& dc = DriverControl::GetInstance();
+    CoreDBG& coreDbg = CoreDBG::GetInstance();
+
+    UINT64 IntelDrvBase = coreDbg.GetModuleBase((char*)"IntelDrvX64.sys");
+
+    UINT64 PtrToFuntionToRewrite = IntelDrvBase + ARG3FCN_REFWIRTE;
+
+    UINT64 PhysicalMemoryOfFunctionToRewrite = dc.Virt2Phys(PtrToFuntionToRewrite);
+
+    BOOL bRes = dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 1,
+        sizeof(UINT32),
+        (UINT8*)OriginalBytes);
+
+    bRes &= dc.WriteOverMapViewOfSection(
+        PhysicalMemoryOfFunctionToRewrite + 5,
+        sizeof(OriginalBytesRes),
+        (UINT8*)&OriginalBytesRes);
+
+    return bRes;
+}
+
+
+/// <summary>
+/// Allocates VAD
+/// </summary>
+/// <param name="StartingVirtualAddress"></param>
+/// <param name="EndingVirtualAddress"></param>
+/// <param name="Deletable"></param>
+/// <returns>if not zero, then success</returns>
+UINT64 VadExplorer::CallMiAllocateVad(UINT64 StartingVirtualAddress,
+    UINT64 EndingVirtualAddress,
+    CHAR Deletable)
+{
+    if (HookDispatchRoutineAndInsertMiAllocateVad())
+    {
+        DriverControl& dc = DriverControl::GetInstance();
+
+        UINT64 res = dc.CallFcn3Arg(StartingVirtualAddress,
+            EndingVirtualAddress,
+            Deletable);
+        HookDispatchRoutineRestoreOriginalBytes();
+        return res;
+    }
+
+    return 0;
+}
+
+/// <summary>
+/// Insetr VAD into tree
+/// </summary>
+/// <param name="VadPtr">VAD PTR</param>
+/// <param name="EPROCESS">EPROCESS PTR</param>
+/// <param name="Deletable">Always true?</param>
+/// <returns>NTSTATUS?</returns>
+UINT64 VadExplorer::CallMiInsertVad(UINT64 VadPtr,
+    UINT64 EPROCESS,
+    CHAR Deletable)
+{
+    if (HookDispatchRoutineAndInsertMiInsertVad())
+    {
+        DriverControl& dc = DriverControl::GetInstance();
+
+        UINT64 res = dc.CallFcn3Arg(VadPtr,
+            EPROCESS,
+            Deletable);
+        HookDispatchRoutineRestoreOriginalBytes();
+        return res;
+    }
+
+    return 0;
+}
+
+/// <summary>
+/// calls insertvadcharges
+/// </summary>
+/// <param name="VadPtr">ptr to VAD</param>
+/// <param name="EPROCESS">ERPTOCESS</param>
+/// <returns>if zero then success</returns>
+UINT64 VadExplorer::CallMiInsertVadCharges(UINT64 VadPtr,
+    UINT64 EPROCESS)
+{
+    if (HookDispatchRoutineAndInsertMiInsertVadCharges())
+    {
+        DriverControl& dc = DriverControl::GetInstance();
+
+        UINT64 res = dc.CallFcn3Arg(VadPtr,
+            EPROCESS,
+            0);
+        HookDispatchRoutineRestoreOriginalBytes();
+        return res;
+    }
+
+    return 0;
+}
+
+BOOL VadExplorer::AllocMemoryUsingVadHook(UINT64 StartingVirtualAddress, UINT64 EndingVirtualAddress, UINT64 EPROCESS)
+{
+
+    UINT64 VADPTR = VadExplorer::CallMiAllocateVad(StartingVirtualAddress,
+        EndingVirtualAddress,
+        1);
+
+    if (VADPTR)
+    {
+        UINT64 MIVCRes = VadExplorer::CallMiInsertVadCharges(VADPTR,
+            EPROCESS
+        );
+
+        if (MIVCRes == 0)
+        {
+            UINT64 MIV = VadExplorer::CallMiInsertVad(VADPTR,
+                EPROCESS,
+                1
+            );
+
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }

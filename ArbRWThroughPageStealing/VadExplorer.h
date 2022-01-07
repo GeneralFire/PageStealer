@@ -5,11 +5,16 @@
 #include "VirtualsHeader.h"
 
 
+#define ARG3FCN_REFWIRTE 0x177F
 
 class VadExplorer
 {
 
 private:
+
+    static UINT8 OriginalBytes[];
+    static UINT8 OriginalBytesRes[];
+    static UINT8 StoreRes[];
 
     typedef struct _MMVAD_FLAGS
     {
@@ -103,6 +108,23 @@ private:
     static VOID DisplayVadInfo(PMMVAD_SHORT pVadInfo);
     static bool SetMMVadByPtr(PMMVAD_SHORT VadPtrInKernelSpace, PMMVAD_SHORT pVadValue);
     static UINT64 _GetTargetVADByRootVadAndVA(UINT64 RootVad, UINT64 VA);
+
+    static BOOL HookDispatchRoutineAndInsertMiAllocateVad();
+    static BOOL HookDispatchRoutineAndInsertMiInsertVad();
+    static BOOL HookDispatchRoutineAndInsertMiInsertVadCharges();
+    static BOOL HookDispatchRoutineRestoreOriginalBytes();
+
+    static UINT64 CallMiAllocateVad(UINT64 StartingVirtualAddress,
+        UINT64 EndingVirtualAddress,
+        CHAR Deletable);
+
+    static UINT64 CallMiInsertVad(UINT64 VadPtr,
+        UINT64 EPROCESS,
+        CHAR Deletable);
+
+    static UINT64 CallMiInsertVadCharges(UINT64 VadPtr,
+        UINT64 EPROCESS);
+
 public:
 
     typedef struct _PUBLIC_VADINFO
@@ -117,4 +139,9 @@ public:
 	static VOID ListVAD(UINT64 PParentVAD, LONG level);
     static UINT64 GetVadRootByEPROCESS(UINT64 EPROCESS);
     static std::vector<PUBLIC_VADINFO> GetVadInfoVectorByRootVad(UINT64 RootVad);
+    
+    
+    static BOOL AllocMemoryUsingVadHook(UINT64 StartingVirtualAddress, UINT64 EndingVirtualAddress, UINT64 EPROCESS);
+
+
 };

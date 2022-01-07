@@ -7,12 +7,13 @@
 
 int main()
 {
+    PageStealer::PROCESS_MINIMAL_INFO DestPMI = PageStealer::GetPMIByProcessName("ArbRWThroughPageStealing.exe");
+
     PVOID sampleAlloc = VirtualAllocEx(OpenProcess(PROCESS_VM_OPERATION, TRUE, GetCurrentProcessId()),
         (PVOID) 0x0000017174540000, PAGE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READONLY);
 
     UINT64 sampleUINT64 = 32;
 
-    PageStealer::PROCESS_MINIMAL_INFO DestPMI = PageStealer::GetPMIByProcessName("ArbRWThroughPageStealing.exe");
     PageStealer::PROCESS_MINIMAL_INFO SourcePMI = PageStealer::GetPMIByProcessName("mspaint.exe");
 
     UINT64 DestKPROCESS = PageStealer::GetKPROCESSByPMI(&DestPMI);
@@ -30,13 +31,7 @@ int main()
     PageStealer::StealEntireVirtualAddressSpace(
         &SourcePMI,
         &DestPMI,
-        false);
-
-    PageStealer::MapVirtualPageToAnotherProcess(&SourcePMI,
-        &DestPMI,
-        0x29255be0000,
-        TRUE);
-
+        true);
 
     pa = PageStealer::VTOP(0x7FF7C06A4000, DestKPROCESS, NULL);
  

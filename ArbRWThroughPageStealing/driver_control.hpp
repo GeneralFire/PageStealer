@@ -49,6 +49,10 @@ public:
     bool    UnmapViewOfSection(UINT64 va);
     bool    ReadOverMapViewOfSection(UINT64 pa, UINT32 size, UINT8* buffer);
     bool    WriteOverMapViewOfSection(UINT64 pa, UINT32 size, UINT8* buffer);
+    bool    MemCopy(UINT64 dest, UINT64 source, UINT32 size);
+
+    // must be already hooked
+    UINT64    CallFcn3Arg(UINT64 arg1, UINT64 arg2, UINT64 arg3);
 private:
     enum class DriverIndex {
         AsrDrv,
@@ -65,7 +69,7 @@ private:
 
     static HANDLE GetDeviceHandle(const LPCTSTR device_name);
     bool Ioctl(DriverIndex driver_index, DWORD ioctl, LPVOID in_buf, DWORD in_buf_size, LPVOID out_buf, DWORD out_buf_size, LPDWORD b_ret);
-    bool MemCopy(UINT64 dest, UINT64 source, UINT32 size);
+    // bool MemCopy(UINT64 dest, UINT64 source, UINT32 size);
     UINT64 MapIoSpace(UINT64 pa, UINT32 size);
     bool UnmapIoSpace(UINT64 va, UINT32 size);
 	ResourceLoader rs;

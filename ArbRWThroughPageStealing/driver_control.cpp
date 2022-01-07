@@ -865,3 +865,37 @@ bool    DriverControl::WriteOverMapViewOfSection(UINT64 pa, UINT32 size, UINT8* 
 
     return false;
 }
+
+UINT64    DriverControl::CallFcn3Arg(UINT64 arg1, UINT64 arg2, UINT64 arg3)
+{
+
+    struct MSGBuffer
+    {
+        UINT64 case_number;     // 0
+        UINT64 reserved;        // 8
+        UINT64 retVal_Arg2;          // 0x10~16
+        UINT64 Arg1;
+        UINT64 Arg3;
+    };
+
+    MSGBuffer MsgBuffer = { 0 };
+    MsgBuffer.case_number = 0x33;
+    MsgBuffer.Arg1 = arg1;
+    MsgBuffer.retVal_Arg2 = arg2;
+    MsgBuffer.Arg3 = arg3;
+
+    DWORD bytes_returned = 0;
+    Ioctl(DriverIndex::Iqvw,
+        iqvw::kIoctlMain,
+        &MsgBuffer,
+        sizeof(MsgBuffer),
+        &MsgBuffer,
+        sizeof(MsgBuffer),
+        &bytes_returned);
+
+    if (MsgBuffer.retVal_Arg2)
+    {
+        return MsgBuffer.retVal_Arg2;
+    }
+    return 0;
+}

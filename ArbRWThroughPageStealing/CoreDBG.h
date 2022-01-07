@@ -51,7 +51,10 @@ public:
 		return instance;
 	}
 	
+	std::map<char*, UINT64> ModuleDict;
+
 	ULONG64 GetKernelBase();
+	ULONG64 GetModuleBase(char* moduleName);
 	ULONG64 getFieldOffset(wchar_t* typeName_, wchar_t* fieldName_);
 	ULONG64 getKernelSymbolAddress(char* symbolName);
 

@@ -96,29 +96,69 @@ ULONG64 CoreDBG::GetKernelBase()
 	}
 	else
 	{
-		GKB::PRTL_PROCESS_MODULES ModuleInfo;
-		ModuleInfo = (GKB::PRTL_PROCESS_MODULES)VirtualAlloc(NULL,
-			1024 * 1024,
-			MEM_COMMIT | MEM_RESERVE,
-			PAGE_READWRITE); // Allocate memory for the module list
-
-		sys::NtQuerySystemInformation(
-			(sys::SYSTEM_INFORMATION_CLASS)11,
-			ModuleInfo,
-			1024 * 1024,
-			NULL
-		);
-
-		if (ModuleInfo == NULL)
-		{
-			debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET KERNEL BASE\n", __func__);
-		}
-
-		KernelBase = (uint64_t)ModuleInfo->Modules[0].ImageBase;
-		VirtualFree(ModuleInfo, 0, MEM_RELEASE);
+		KernelBase = GetModuleBase((char*)"ntoskrnl.exe");
 		return KernelBase;
 	}
 }
+
+ULONG64 CoreDBG::GetModuleBase(char* moduleName)
+{
+
+	UINT64 retVal = 0;
+
+	try
+	{
+		retVal = ModuleDict.at(moduleName);
+		debug::printf_d(debug::LogLevel::LOG, "%s Using existing keys for (%s)\n", __func__, moduleName);
+		return retVal;
+	}
+	catch (const std::out_of_range)
+	{
+		debug::printf_d(debug::LogLevel::LOG, "%s First for (%s). Let's try to find it\n", __func__, moduleName);
+	}
+
+	GKB::PRTL_PROCESS_MODULES ModuleInfo;
+	ModuleInfo = (GKB::PRTL_PROCESS_MODULES)VirtualAlloc(NULL,
+		1024 * 1024,
+		MEM_COMMIT | MEM_RESERVE,
+		PAGE_READWRITE); // Allocate memory for the module list
+
+	sys::NtQuerySystemInformation(
+		(sys::SYSTEM_INFORMATION_CLASS)11,
+		ModuleInfo,
+		1024 * 1024,
+		NULL
+	);
+
+	if (ModuleInfo == NULL)
+	{
+		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET KERNEL BASE\n", __func__);
+	}
+
+	for (int i = 0; i < ModuleInfo->NumberOfModules; i++)
+	{
+		std::string targetModuleName = std::string(moduleName);
+		std::string currentModuleFullPath = std::string((char*) ModuleInfo->Modules[i].FullPathName);
+		std::string currentModuleName = currentModuleFullPath.substr(currentModuleFullPath.find_last_of("/\\") + 1);
+		
+		if (!currentModuleName.compare(targetModuleName))
+		{
+			retVal = (UINT64) ModuleInfo->Modules[i].ImageBase;
+			break;
+		}
+
+	}
+
+	VirtualFree(ModuleInfo, 0, MEM_RELEASE);
+
+	if (retVal == 0)
+	{
+		debug::printf_d(debug::LogLevel::FATAL, "%s cannot get module base address\n", __func__);
+	}
+	ModuleDict[moduleName] = retVal;
+	return retVal;
+}
+
 ULONG64 CoreDBG::getFieldOffset(wchar_t* typeName_, wchar_t* fieldName_) {
 
 	UINT64 offset = 0;
