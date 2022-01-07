@@ -750,7 +750,7 @@ bool DriverControl::MapViewOfSection(UINT64 pa, UINT32 size, UINT64* va)
             sizeof(msg),
             &msg,
             sizeof(msg),
-            &bytes_returned))
+            &bytes_returned) && bytes_returned)
         {
             *va = (ULONGLONG)msg.VA;
             return true;
@@ -771,7 +771,7 @@ bool DriverControl::MapViewOfSection(UINT64 pa, UINT32 size, UINT64* va)
             sizeof(msg),
             &msg,
             sizeof(msg),
-            &bytes_returned))
+            &bytes_returned) && bytes_returned)
         {
             *va = (ULONGLONG)msg.VA;
             return true;

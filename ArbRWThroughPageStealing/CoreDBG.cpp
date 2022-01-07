@@ -88,6 +88,37 @@ char* CoreDBG::getPdb() {
 #endif
 }
 
+ULONG64 CoreDBG::GetKernelBase()
+{
+	if (KernelBase != 0)
+	{
+		return KernelBase;
+	}
+	else
+	{
+		GKB::PRTL_PROCESS_MODULES ModuleInfo;
+		ModuleInfo = (GKB::PRTL_PROCESS_MODULES)VirtualAlloc(NULL,
+			1024 * 1024,
+			MEM_COMMIT | MEM_RESERVE,
+			PAGE_READWRITE); // Allocate memory for the module list
+
+		sys::NtQuerySystemInformation(
+			(sys::SYSTEM_INFORMATION_CLASS)11,
+			ModuleInfo,
+			1024 * 1024,
+			NULL
+		);
+
+		if (ModuleInfo == NULL)
+		{
+			debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET KERNEL BASE\n", __func__);
+		}
+
+		KernelBase = (uint64_t)ModuleInfo->Modules[0].ImageBase;
+		VirtualFree(ModuleInfo, 0, MEM_RELEASE);
+		return KernelBase;
+	}
+}
 ULONG64 CoreDBG::getFieldOffset(wchar_t* typeName_, wchar_t* fieldName_) {
 
 	UINT64 offset = 0;

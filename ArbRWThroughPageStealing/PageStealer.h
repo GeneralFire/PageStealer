@@ -30,9 +30,13 @@ public:
 	static BOOL MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 VA, BOOL MakePageWritable);
 	static BOOL StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, BOOL DropHighUserMemory);
 
+
 private:
 	static std::map<DWORD, UINT64> EprocessDictionary;
+	static std::map<UINT64, UINT64> DirTableDictionary;
 	
+	static UINT64 PfnDataBase;
+
 	static DWORD GetPIDByName(std::wstring ProcessName);
 	static UINT64 _GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI);
 	static UINT64 GetDirectoryTableFromKPROCESS(UINT64 KPROCESS);

@@ -2,18 +2,9 @@
 
 #include "CoreDBG.h"
 #include "driver_control.hpp"
+#include "VirtualsHeader.h"
 
-#define MM_ZERO_ACCESS         0  // this value is not used. 
-#define MM_READONLY            1 
-#define MM_EXECUTE             2 
-#define MM_EXECUTE_READ        3 
-#define MM_READWRITE           4  // bit 2 is set if this is writable. 
-#define MM_WRITECOPY           5 
-#define MM_EXECUTE_READWRITE   6 
-#define MM_EXECUTE_WRITECOPY   7 
-#define MM_NOCACHE             8 
-#define MM_DECOMMIT         0x10 
-#define MM_NOACCESS         MM_DECOMMIT|MM_NOCACHE
+
 
 class VadExplorer
 {
@@ -46,27 +37,7 @@ private:
         ULONG MemCommit : 1;                                                      //0x0
     } _MMVAD_FLAGS1, *PMMVAD_FLAGS1;
 
-    typedef struct _RTL_BALANCED_NODE
-    {
-        union
-        {
-            struct _RTL_BALANCED_NODE* Children[2];                             //0x0
-            struct
-            {
-                struct _RTL_BALANCED_NODE* Left;                                //0x0
-                struct _RTL_BALANCED_NODE* Right;                               //0x8
-            };
-        };
-        union
-        {
-            struct
-            {
-                UCHAR Red : 1;                                                    //0x10
-                UCHAR Balance : 2;                                                //0x10
-            };
-            ULONGLONG ParentValue;                                              //0x10
-        };
-    } RTL_BALANCED_NODE, *PRTL_BALANCED_NODE;
+
 
     typedef struct _EX_PUSH_LOCK
     {

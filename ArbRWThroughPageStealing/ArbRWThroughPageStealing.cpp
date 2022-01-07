@@ -8,7 +8,7 @@
 int main()
 {
     PVOID sampleAlloc = VirtualAllocEx(OpenProcess(PROCESS_VM_OPERATION, TRUE, GetCurrentProcessId()),
-        0, PAGE_SIZE, MEM_COMMIT, PAGE_READONLY);
+        (PVOID) 0x0000017174540000, PAGE_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READONLY);
 
     UINT64 sampleUINT64 = 32;
 
@@ -30,7 +30,7 @@ int main()
     PageStealer::StealEntireVirtualAddressSpace(
         &SourcePMI,
         &DestPMI,
-        true);
+        false);
 
     PageStealer::MapVirtualPageToAnotherProcess(&SourcePMI,
         &DestPMI,
@@ -39,8 +39,6 @@ int main()
 
 
     pa = PageStealer::VTOP(0x7FF7C06A4000, DestKPROCESS, NULL);
-
-    
-    
+ 
     return 0;
 }

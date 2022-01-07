@@ -1,6 +1,9 @@
 #include "PageStealer.h"
 
 std::map<DWORD, UINT64> PageStealer::EprocessDictionary;
+std::map<UINT64, UINT64> PageStealer::DirTableDictionary;
+UINT64 PageStealer::PfnDataBase = 0;
+
 /// <summary>
 /// RETURNS DirectoryTable content
 /// </summary>
@@ -241,17 +244,27 @@ UINT64 PageStealer::GetKPROCESSByPMI(PPROCESS_MINIMAL_INFO PMI)
 	return EPROCESS;
 }
 
-UINT64 PageStealer::GetDirectoryTableFromKPROCESS(UINT64 KPROCESS_)
+UINT64 PageStealer::GetDirectoryTableFromKPROCESS(UINT64 KPROCESS)
 {
-	UINT64 KPROCESS = (UINT64)KPROCESS_;
+	UINT64 DirBaseAddress = 0;
+	try
+	{
+		DirBaseAddress = DirTableDictionary.at(KPROCESS);
+		debug::printf_d(debug::LogLevel::LOG, "%s Using existing keys for (%llx)\n", __func__, KPROCESS);
+		return DirBaseAddress;
+	}
+	catch (const std::out_of_range)
+	{
+		debug::printf_d(debug::LogLevel::LOG, "%s First for (%llx). Let's try to find it\n", __func__, KPROCESS);
+	}
+
 	CoreDBG& coreDbg = CoreDBG::GetInstance();
 	UINT64 DirBaseOffset = coreDbg.getFieldOffset((wchar_t*)L"_KPROCESS", (wchar_t*)L"DirectoryTableBase");
 
 	DriverControl& dc = DriverControl::GetInstance();
-	UINT64 DirBaseAddress = { 0 };
-
 	if (dc.ReadKernelVA(KPROCESS + DirBaseOffset, 8, (UINT8*)&DirBaseAddress))
 	{
+		DirTableDictionary[KPROCESS] = DirBaseAddress;
 		return DirBaseAddress;
 	}
 	else
@@ -262,119 +275,17 @@ UINT64 PageStealer::GetDirectoryTableFromKPROCESS(UINT64 KPROCESS_)
 
 PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPROCESS, UINT64 PA, DWORD PageCount)
 {
-	UINT64 DirectoryTable = GetDirectoryTableFromKPROCESS(KPROCESS);
-
-	if ((PA & 0xFFF) != 0)
-	{
-		debug::printf_d(debug::LogLevel::ERR, "%S: PA should be aligned\n");
-		// return NULL;
-	}
-
-	// 1. get free virtual address
-	
-
-	VIRTUAL_ADDRESS va = { (PVOID) malloc(PAGE_SIZE)};
-	
-	PAGE_ENTRY<PML4E> pml4_entry = { 0 };
-
-	DriverControl& dc = DriverControl::GetInstance();
-	BOOL FailFlag = true;
-
-	VirtualAddressTableEntries VATableEntries = { 0 };
-	VTOP((UINT64)va.value, KPROCESS, &VATableEntries);
-
-
-	//for (unsigned int PML4Iterator = 0; PML4Iterator < 512; PML4Iterator++)
-	//{
-	//	if (dc.ReadOverMapViewOfSection((UINT64)DirectoryTable + sizeof(PML4E) * PML4Iterator, sizeof(PML4E), (UINT8*)&pml4_entry.value.value))
-	//	{
-	//		if (!pml4_entry.value.present)
-	//		{
-				// fix this entry
-				pml4_entry.value.present = 0;
-				pml4_entry.value.writable = 1;
-				pml4_entry.value.user_access = 1;
-				pml4_entry.value.accessed = 1;
-				pml4_entry.value.ignored_3 = 1;
-				pml4_entry.value.ignored_2 = 8;
-				pml4_entry.value.ignored_1 = 0xa0;
-
-				FailFlag = false;
-	/*			break;
-			}
-		}
-	}*/
-
-	if (FailFlag)
-	{
-		debug::printf_d(debug::LogLevel::ERR, "CANNOT FIND FREE PML4");
-		return NULL;
-	}
-
-	PAGE_ENTRY<PDPE> pdp_entry = { 0 };
-	pdp_entry.value.present = 0; // fix me
-	pdp_entry.value.writable = 1;
-	pdp_entry.value.user_access = 1;
-	pdp_entry.value.accessed = 1;
-	pdp_entry.value.ignored_3 = 1;
-	pdp_entry.value.ignored_2 = 8;
-	pdp_entry.value.ignored_1 = 0xa0;
-
-	PAGE_ENTRY<PDE> pd_entry = { 0 };
-	pd_entry.value.present = 0;	// fix me
-	pd_entry.value.writable = 1;
-	pd_entry.value.user_access = 1;
-	pd_entry.value.accessed = 1;
-	pd_entry.value.ignored_2 = 8;
-	pd_entry.value.ignored_1 = 0xa0;
-	pd_entry.value.ignored1 = 0x1;
-
-	PAGE_ENTRY<PTE> pt_entry = { 0 };
-	pt_entry.value.present = 0;	// fix me
-	pt_entry.value.writable = 1;
-	pt_entry.value.user_access = 1;
-	pt_entry.value.accessed = 1;
-	pt_entry.value.dirty = 1;
-	pt_entry.value.ignored_2 = 4;
-	pt_entry.value.ignored_3 = 0x10;
-
-
-	pt_entry.value.pfn = 0;
-
-	pml4_entry.pointer = (PPML4E)DirectoryTable + va.pml4_index;
-	debug::printf_d(debug::LogLevel::ERR, "PML4E 0x%llx\n", pml4_entry.pointer);
-
-	//if (dc.WriteOverMapViewOfSection((UINT64)pml4_entry.pointer,
-	//	sizeof(PML4E), (UINT8*)&pml4_entry.value.value))
-	//{
-	//	pdp_entry.pointer = (PPDPE)(pml4_entry.value.pfn << PAGE_SHIFT) + va.pdp_index;
-	//	debug::printf_d("PDPE 0x%llx\n", pdp_entry.pointer);
-
-	//	if (dc.WriteOverMapViewOfSection((UINT64)pdp_entry.pointer,
-	//		sizeof(PDPE), (UINT8*)&pdp_entry.value))
-	//	{
-	//		pd_entry.pointer = (PPDE)(pdp_entry.value.pfn << PAGE_SHIFT) + va.pd_index;
-	//		debug::printf_d("PDE 0x%llx\n", pd_entry.pointer);
-
-	//		if (dc.WriteOverMapViewOfSection((UINT64)pd_entry.pointer,
-	//			sizeof(PDE), (UINT8*)&pd_entry.value))
-	//		{
-	//			pt_entry.pointer = (PPTE)(pd_entry.value.pfn << PAGE_SHIFT) + va.pt_index;
-	//			// printf("PTE 0x%llx\n", pt_entry.pointer);
-	//			debug::printf_d("PTE 0x%llx\n", pt_entry.pointer);
-	//			if (dc.WriteOverMapViewOfSection((UINT64)pt_entry.pointer,
-	//				sizeof(PTE), (UINT8*)&pt_entry.value))
-	//			{
-	//				debug::printf_d("%llx\n", (pt_entry.value.pfn << PAGE_SHIFT) + va.offset);
-	//				return (VOID*)(pt_entry.value.pfn << PAGE_SHIFT + va.offset);
-	//			}
-	//		}
-	//	}
-	//}
 	debug::printf_d(debug::LogLevel::FATAL, "%s FIX ME", __func__);
+	
 	return NULL;
 }
 
+
+/*
+Idea:
+Allocate Vitrual memory on Dest process at the same VA; (+check if is it already exist (true->fail))
+Edit PTE point to same physical memory as in source (+check if is it doesnt exist (true->fail))
+*/
 /// <summary>
 /// Allocates page in destination process on the same virtual address
 /// then edit dir table entries to point to physical page of source process
@@ -386,7 +297,7 @@ PVOID PageStealer::MapSinglePhysicalPageToProcessVirtualAddressSpace(UINT64 KPRO
 /// <returns>return TRUE if success, otherwise FALSE</returns>
 BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, UINT64 va_, BOOL MakePageWritable)
 {
-	//
+	// debug::printf_d(debug::LogLevel::FATAL, "%s FIX ME", __func__);
 	
 	if (SourcePMI->PID == -1 || DestPMI->PID == -1 || SourcePMI->PID == 0 || DestPMI->PID == 0)
 	{
@@ -406,18 +317,6 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 	UINT64 SourceDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPMI(SourcePMI));
 	UINT64 DestDirTable = (UINT64) GetDirectoryTableFromKPROCESS(GetKPROCESSByPMI(DestPMI));
 
-	// get table entries from source process
-	VirtualAddressTableEntries SourceTableEntries = { 0 };
-	VTOP((UINT64) va.value, (UINT64) GetKPROCESSByPMI(SourcePMI), &SourceTableEntries);
-	if (!(SourceTableEntries.pt_entry.value.present
-		& SourceTableEntries.pd_entry.value.present
-		& SourceTableEntries.pdp_entry.value.present
-		& SourceTableEntries.pml4_entry.value.present))
-	{
-		debug::printf_d(debug::LogLevel::ERR, "%s TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE (0x%llx)\n", __func__, va.value);
-		return FALSE;
-	}
-
 	// get table entries from dest 
 	VirtualAddressTableEntries OriginalDestTableEntries = { 0 };
 	VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(DestPMI), &OriginalDestTableEntries);
@@ -430,6 +329,22 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 		return FALSE;
 	}
 
+	debug::printf_d(debug::LogLevel::VERBOSE, "%s TARGET VIRTUAL ADDRESS DOESNT IN DEST (0x%llx). LETS MAP PHYS HERE\n", __func__, va.value);
+
+	// get table entries from source process
+	VirtualAddressTableEntries SourceTableEntries = { 0 };
+
+	if (!VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(SourcePMI), &SourceTableEntries)
+		&& 
+		(!(SourceTableEntries.pt_entry.value.present
+		&& SourceTableEntries.pd_entry.value.present
+		&& SourceTableEntries.pdp_entry.value.present
+		&& SourceTableEntries.pml4_entry.value.present)))
+	{
+		debug::printf_d(debug::LogLevel::ERR, "%s TARGET VIRTUAL ADDRESS DOESN'T EXIST IN SORUCE (0x%llx)\n", __func__, va.value);
+		return FALSE;
+	}
+
 	HANDLE DestProcessHandle = OpenProcess(PROCESS_VM_OPERATION, TRUE, DestPMI->PID);
 	if (DestProcessHandle == INVALID_HANDLE_VALUE)
 	{
@@ -439,32 +354,34 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 
 	PVOID VirtualAllocRes = NULL;
 	
-	if (MakePageWritable)
-	{
-		VirtualAllocRes = VirtualAllocEx(DestProcessHandle, (PVOID)va.value, PAGE_SIZE, MEM_COMMIT, PAGE_READWRITE);
-	}
-	else
-	{
-		VirtualAllocRes = VirtualAllocEx(DestProcessHandle, (PVOID)va.value, PAGE_SIZE, MEM_COMMIT, PAGE_READONLY);
-	}
+
+	VirtualAllocRes = VirtualAllocEx(OpenProcess(PROCESS_VM_OPERATION, TRUE, GetCurrentProcessId()),
+		(PVOID)va.value, 
+		PAGE_SIZE, MEM_COMMIT |MEM_RESERVE, 
+		MakePageWritable?PAGE_READWRITE:PAGE_READONLY
+	);
+
 	if (VirtualAllocRes == NULL)
 	{
 		DWORD LE = GetLastError();
 		debug::printf_d(debug::LogLevel::WARN, "%s last err: %llx\n", __func__, LE);
-		debug::printf_d(debug::LogLevel::WARN, "LET'S JUST EDIT PAGE TABLE\n");
-		// return FALSE;
+		// debug::printf_d(debug::LogLevel::WARN, "LET'S JUST EDIT PAGE TABLE\n");
+		return FALSE;
 	}
+
 	if (VirtualAllocRes == (PVOID)va.value)
 	{
 		debug::printf_d(debug::LogLevel::VERBOSE, "%s SUCCESSFULLY ALLOCATED THE SAME VA (0x%llx)\n", __func__, VirtualAllocRes);
+		UINT64 a = *(UINT64*)(VirtualAllocRes);
 	}
+
 	if (VirtualAllocRes != (PVOID)va.value && VirtualAllocRes != NULL)
 	{
 		debug::printf_d(debug::LogLevel::WARN, "%s ALLOCATED PAGE DOESN'T MATCH SPECIFIED VIRTUAL ADDRESS\n", __func__);
 		BOOL bRes = VirtualFreeEx(DestProcessHandle, VirtualAllocRes, 0, MEM_RELEASE);
 		if (!bRes)
 		{
-			debug::printf_d(debug::LogLevel::WARN, "%s CANNOT FREE??\n", __func__);
+			debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT FREE??\n", __func__);
 		}
 		CloseHandle(DestProcessHandle);
 		return FALSE;
@@ -472,47 +389,66 @@ BOOL PageStealer::MapVirtualPageToAnotherProcess(PPROCESS_MINIMAL_INFO SourcePMI
 
 	DriverControl& dc = DriverControl::GetInstance();
 
-	if (!OriginalDestTableEntries.pml4_entry.value.present)
+	// get table entries after allocation from dest 
+	OriginalDestTableEntries = { 0 };
+	if (!VTOP((UINT64)va.value, (UINT64)GetKPROCESSByPMI(DestPMI), &OriginalDestTableEntries)
+		&& 
+		(!(OriginalDestTableEntries.pt_entry.value.present
+		&& OriginalDestTableEntries.pd_entry.value.present
+		&& OriginalDestTableEntries.pdp_entry.value.present
+		&& OriginalDestTableEntries.pml4_entry.value.present)))
 	{
-		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pml4_entry.pointer,
-			sizeof(PML4E), (UINT8*)&SourceTableEntries.pml4_entry.value.value);
+		debug::printf_d(debug::LogLevel::VERBOSE, "%s (AFTER ALLOCATION) TARGET VIRTUAL ADDRESS DOESNT IN DEST (0x%llx)\n", __func__, va.value);
+		return FALSE;
+	}
 
-	}
-	if (!OriginalDestTableEntries.pdp_entry.value.present)
+
+	CoreDBG& CoreDbg = CoreDBG::GetInstance();
+	UINT64 PfnDatabaseAddressPtr = CoreDbg.GetKernelBase() + CoreDbg.getKernelSymbolAddress((char*)"MmPfnDatabase");
+
+	if (!PfnDataBase)
 	{
-		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pdp_entry.pointer,
-			sizeof(PDPE), (UINT8*)&SourceTableEntries.pdp_entry.value.value);
+		if (!dc.ReadKernelVA(PfnDatabaseAddressPtr, sizeof(UINT64), (UINT8*)&PfnDataBase))
+		{
+			debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET PFN DATABASE\n", __func__);
+		}
 	}
-	if (!OriginalDestTableEntries.pd_entry.value.present)
+
+	// 1. inc share count
+
+	_MMPFN PfnDataBaseEntry = { 0 };
+	debug::printf_d(debug::LogLevel::LOG, "%s Loking for pfn entry at 0x%llx\n", 
+		__func__,
+		PfnDataBase + sizeof(_MMPFN) * SourceTableEntries.pt_entry.value.pfn
+	);
+	if (!dc.ReadKernelVA(PfnDataBase + sizeof(_MMPFN) * SourceTableEntries.pt_entry.value.pfn,
+		sizeof(_MMPFN),
+		(UINT8*)&PfnDataBaseEntry))
 	{
-		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pd_entry.pointer,
-			sizeof(PDE), (UINT8*)&SourceTableEntries.pd_entry.value.value);
+		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET PFN DATABASE ENTRY\n", __func__);
 	}
-	if (!OriginalDestTableEntries.pt_entry.value.present)
+
+	if (!dc.ReadKernelVA(PfnDataBase + sizeof(_MMPFN) * OriginalDestTableEntries.pt_entry.value.pfn,
+		sizeof(_MMPFN),
+		(UINT8*)&PfnDataBaseEntry))
 	{
-		dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pt_entry.pointer,
+		debug::printf_d(debug::LogLevel::FATAL, "%s CANNOT GET PFN DATABASE ENTRY\n", __func__);
+	}
+
+	// 2. write pt to dest process
+	/*dc.WriteOverMapViewOfSection((UINT64)OriginalDestTableEntries.pt_entry.pointer,
 			sizeof(PTE), (UINT8*)&SourceTableEntries.pt_entry.value.value);
-	}
+			*/
 
 	CloseHandle(DestProcessHandle);
-	DWORD OldProtect = 0;
 
-	//MEMORY_BASIC_INFORMATION info = { 0 };
-	//SIZE_T len = VirtualQuery(va.value, &info, sizeof(info));
-
-	//BOOL bRes = VirtualProtect(va.value,
-	//	1024,
-	//	PAGE_EXECUTE_READWRITE,
-	//	&OldProtect);
-	//DWORD LE = GetLastError();
-
-	UINT32 a = *(UINT32*)(va.value);
-
-	return FALSE;
+	return TRUE;
 }
 
 BOOL PageStealer::StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI, PPROCESS_MINIMAL_INFO DestPMI, BOOL DropHighUserMemory)
 {
+	// debug::printf_d(debug::LogLevel::FATAL, "%s FIX ME", __func__);
+
 	UINT64 DestKPROCESS = PageStealer::GetKPROCESSByPMI(DestPMI);
 	UINT64 SourceKPROCESS = PageStealer::GetKPROCESSByPMI(SourcePMI);
 
@@ -523,12 +459,19 @@ BOOL PageStealer::StealEntireVirtualAddressSpace(PPROCESS_MINIMAL_INFO SourcePMI
 
 	for (VadExplorer::PUBLIC_VADINFO& a : DestVadInfoVec)
 	{
-		if (DropHighUserMemory && ((a.StartingVpn >> 32) == 0))
+		if (DropHighUserMemory)
 		{
-			PageStealer::MapVirtualPageToAnotherProcess(SourcePMI,
-				DestPMI,
-				a.StartingVpn << 12,
-				TRUE);
+			if (((a.StartingVpn >> 32) == 0))
+			{
+				PageStealer::MapVirtualPageToAnotherProcess(SourcePMI,
+					DestPMI,
+					a.StartingVpn << 12,
+					TRUE);
+			}
+			else
+			{
+				debug::printf_d(debug::LogLevel::LOG, "%s SKIPPING THIS (0x%llx) PAGE COZ IT'S HIGH\n", __func__, a.StartingVpn << 12);
+			}
 		}
 		else
 		{
